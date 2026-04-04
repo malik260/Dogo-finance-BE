@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Verify Your Email - DogoFinance</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f6f9fc; margin: 0; padding: 0;">
+    <div class="wrapper" style="width: 100%; table-layout: fixed; background-color: #f6f9fc; padding-bottom: 40px;">
+        <table class="main" style="background-color: #ffffff; margin: 0 auto; width: 100%; max-width: 600px; border-spacing: 0; color: #4a4a4a; border-radius: 8px; overflow: hidden; margin-top: 40px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+            <tr>
+                <td class="header" style="background-color: #ffffff; padding: 40px 30px; text-align: center;">
+                    <img src="https://www.dogofinance.com/assets/logo-blue.png" alt="DogoFinance" width="150" style="display: block; margin: 0 auto;">
+                </td>
+            </tr>
+            <tr>
+                <td class="body" style="padding: 0 30px;">
+                    <h1 style="color: #1B4332; font-size: 24px; font-weight: 700; line-height: 1.2; margin-top: 0;">Verify your email address</h1>
+                    <p style="font-size: 16px; line-height: 1.6; color: #525f7f; margin-bottom: 20px;">Hi {{FirstName}},</p>
+                    <p style="font-size: 16px; line-height: 1.6; color: #525f7f; margin-bottom: 20px;">Welcome to DogoFinance! To get started and ensure your account is secure, we need to verify your email address.</p>
+                    
+                    <div class="button-container" style="text-align: center; padding: 30px 0;">
+                        <!-- Bulletproof button design -->
+                        <a href="{{VerificationLink}}" 
+                           style="background-color: #1B4332; border: 15px solid #1B4332; border-radius: 8px; color: #C9A84C !important; display: inline-block; font-family: sans-serif; font-size: 16px; font-weight: bold; text-align: center; text-decoration: none; width: 220px; -webkit-text-size-adjust: none; box-shadow: 0 4px 10px rgba(27, 67, 50, 0.2);">
+                            Verify Email Address
+                        </a>
+                    </div>
+                    
+                    <p style="font-size: 16px; line-height: 1.6; color: #525f7f; margin-bottom: 20px;">If you did not create an account, please ignore this email.</p>
+                    <p style="font-size: 16px; line-height: 1.6; color: #525f7f; margin-bottom: 20px;">Thank you,<br>The DogoFinance Team</p>
+                    
+                    <div class="link-fallback" style="color: #8898aa; font-size: 13px; word-break: break-all; margin-top: 30px; border-top: 1px solid #e6ebf1; padding-top: 20px;">
+                        If the button above doesn't work, copy and paste this link into your browser: <br>
+                        <a href="{{VerificationLink}}" style="color: #32325d; text-decoration: underline;">{{VerificationLink}}</a>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td class="footer" style="padding: 40px 30px; text-align: center; color: #8898aa; font-size: 13px; line-height: 1.6;">
+                    &copy; 2026 DogoFinance. All rights reserved.<br>
+                    Tesmot House, 3 Abdulrahman Okene Close, Victoria Island, Lagos.
+                </td>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>

@@ -1,0 +1,99 @@
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using DogoFinance.Integration.Interfaces;
+using DogoFinance.Integration.Models.Monnify;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+
+namespace DogoFinance.Integration.Services
+{
+    public class MonnifyService : IMonnifyService
+    {
+        private readonly HttpClient _httpClient;
+        private readonly IConfiguration _configuration;
+        private readonly ILogger<MonnifyService> _logger;
+        private string? _accessToken;
+
+        public MonnifyService(HttpClient httpClient, IConfiguration configuration, ILogger<MonnifyService> logger)
+        {
+            _httpClient = httpClient;
+            _configuration = configuration;
+            _logger = logger;
+        }
+
+        private async Task Authenticate()
+        {
+            var apiKey = _configuration["Monnify:ApiKey"];
+            var secretKey = _configuration["Monnify:SecretKey"];
+            var baseUrl = _configuration["Monnify:BaseUrl"];
+
+            var authString = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{apiKey}:{secretKey}"));
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authString);
+
+            var response = await _httpClient.PostAsync($"{baseUrl}/api/v1/auth/login", null);
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var authResponse = JsonSerializer.Deserialize<AuthResponse>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                _accessToken = authResponse?.ResponseBody?.AccessToken;
+            }
+        }
+
+        public async Task<InitializeTransactionResponse?> InitializeTransaction(InitializeTransactionRequest request)
+        {
+            await Authenticate();
+            if (string.IsNullOrEmpty(_accessToken)) return null;
+
+            request.ContractCode = _configuration["Monnify:ContractCode"];
+            var baseUrl = _configuration["Monnify:BaseUrl"];
+
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+            var json = JsonSerializer.Serialize(request);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PostAsync($"{baseUrl}/api/v1/merchant/transactions/init-transaction", content);
+            var responseContent = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+                return JsonSerializer.Deserialize<InitializeTransactionResponse>(responseContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            _logger.LogError("Monnify Initiation Failed: {Content}", responseContent);
+            return null;
+        }
+
+        public async Task<SingleTransferResponse?> SingleTransfer(SingleTransferRequest request)
+        {
+            await Authenticate();
+            if (string.IsNullOrEmpty(_accessToken)) return null;
+
+            request.SourceAccountNumber = _configuration["Monnify:MonnifyAccountNumber"];
+            var baseUrl = _configuration["Monnify:BaseUrl"];
+
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+            var json = JsonSerializer.Serialize(request);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PostAsync($"{baseUrl}/api/v1/disbursements/single", content);
+            var responseContent = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+                return JsonSerializer.Deserialize<SingleTransferResponse>(responseContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            _logger.LogError("Monnify Transfer Failed: {Content}", responseContent);
+            return null;
+        }
+    }
+
+    internal class AuthResponse
+    {
+        public bool RequestSuccessful { get; set; }
+        public AuthResponseBody? ResponseBody { get; set; }
+    }
+
+    internal class AuthResponseBody
+    {
+        public string? AccessToken { get; set; }
+        public int ExpiresIn { get; set; }
+    }
+}
