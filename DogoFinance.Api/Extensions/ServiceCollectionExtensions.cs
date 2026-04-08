@@ -9,6 +9,8 @@ using DogoFinance.AdminManagement.Services;
 using DogoFinance.BusinessLogic.Layer.Helpers;
 using DogoFinance.TransactionManagement.Interfaces;
 using DogoFinance.TransactionManagement.Services;
+using DogoFinance.ProductManagement.Interfaces;
+using DogoFinance.ProductManagement.Services;
 using DogoFinance.DataAccess.Layer;
 using DogoFinance.DataAccess.Layer.Global;
 using DogoFinance.DataAccess.Layer.Interfaces;
@@ -40,6 +42,13 @@ namespace DogoFinance.Api.Extensions
 
             // Register Transaction Services
             services.AddScoped<ITransactionService, TransactionService>();
+
+            // Register Product Services
+            services.AddScoped<IProductService, ProductService>();
+            services.AddScoped<IProductTypeService, ProductTypeService>();
+            services.AddScoped<IAssetTypeService, AssetTypeService>();
+            services.AddScoped<IAssetAllocationService, AssetAllocationService>();
+            services.AddScoped<ISystemSettingService, SystemSettingService>();
 
             // Register individual repositories if needed (Fintrak often does both)
             // services.AddScoped<IAccountRepository, AccountRepository>();

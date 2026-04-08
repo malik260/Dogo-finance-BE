@@ -59,6 +59,7 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public long? CreatedBy { get; set; }
         public DateTime? ModifiedAt { get; set; }
         public long? ModifiedBy { get; set; }
+        public string? PhoneNumber { get; set; }
         public bool IsDeleted { get; set; }
         [Timestamp]
         public byte[] RowVersion { get; set; } = null!;

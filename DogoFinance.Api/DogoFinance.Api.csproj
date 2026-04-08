@@ -20,6 +20,7 @@
     <ProjectReference Include="..\DogoFinance.Authentication\DogoFinance.Authentication.csproj" />
     <ProjectReference Include="..\DogoFinance.AdminManagement\DogoFinance.AdminManagement.csproj" />
     <ProjectReference Include="..\DogoFinance.DataAccess.Layer\DogoFinance.DataAccess.Layer.csproj" />
+    <ProjectReference Include="..\DogoFinance.ProductManagement\DogoFinance.ProductManagement.csproj" />
   </ItemGroup>
 
 </Project>

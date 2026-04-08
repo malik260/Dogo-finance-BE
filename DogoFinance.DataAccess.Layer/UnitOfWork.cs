@@ -28,5 +28,11 @@ namespace DogoFinance.DataAccess.Layer
 
         private ILedgerRepository? _ledger;
         public ILedgerRepository Ledgers => _ledger ??= new LedgerRepository();
+
+        private IProductRepository? _products;
+        public IProductRepository Products => _products ??= new ProductRepository();
+
+        private ISystemSettingRepository? _settings;
+        public ISystemSettingRepository SystemSettings => _settings ??= new SystemSettingRepository();
     }
 }

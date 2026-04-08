@@ -29,6 +29,10 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public string Email { get; set; } = null!;
         [StringLength(20)]
         public string PhoneNumber { get; set; } = null!;
+        [StringLength(100)]
+        public string? FirstName { get; set; }
+        [StringLength(100)]
+        public string? LastName { get; set; }
         [StringLength(500)]
         public string PasswordHash { get; set; } = null!;
         [StringLength(200)]
@@ -57,7 +61,7 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public int PinFailedAttempts { get; set; }
         public bool IsPinLocked { get; set; }
         public DateTime? LastPinChangeDate { get; set; }
-        public bool Is2faEnabled { get; set; }
+        public bool? Is2faEnabled { get; set; }
         [StringLength(10)]
         public string? VerificationCode { get; set; }
         public DateTime? VerificationExpiry { get; set; }

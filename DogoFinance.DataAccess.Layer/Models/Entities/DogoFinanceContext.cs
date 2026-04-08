@@ -34,6 +34,14 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public virtual DbSet<TblUserSession> TblUserSessions { get; set; } = null!;
         public virtual DbSet<TblBank> TblBanks { get; set; } = null!;
         public virtual DbSet<TblCustomerBank> TblCustomerBanks { get; set; } = null!;
+        public virtual DbSet<TblModule> TblModules { get; set; } = null!;
+        public virtual DbSet<TblAccessRight> TblAccessRights { get; set; } = null!;
+        public virtual DbSet<TblRoleAccessRight> TblRoleAccessRights { get; set; } = null!;
+        public virtual DbSet<TblProductType> TblProductTypes { get; set; } = null!;
+        public virtual DbSet<TblProduct> TblProducts { get; set; } = null!;
+        public virtual DbSet<TblAssetType> TblAssetTypes { get; set; } = null!;
+        public virtual DbSet<TblAssetAllocation> TblAssetAllocations { get; set; } = null!;
+        public virtual DbSet<TblSystemSetting> TblSystemSettings { get; set; } = null!;
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -238,6 +246,54 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
                     .HasForeignKey(d => d.CustomerId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_CUSTOMER_BANK_CUSTOMER");
+            });
+
+            modelBuilder.Entity<TblRoleAccessRight>(entity =>
+            {
+                entity.ToTable("TBL_ROLE_ACCESS_RIGHT");
+                entity.HasKey(e => e.Id);
+
+                entity.HasOne(d => d.Role)
+                    .WithMany()
+                    .HasForeignKey(d => d.RoleId)
+                    .OnDelete(DeleteBehavior.ClientSetNull);
+
+                entity.HasOne(d => d.AccessRight)
+                    .WithMany()
+                    .HasForeignKey(d => d.AccessRightId)
+                    .OnDelete(DeleteBehavior.ClientSetNull);
+            });
+
+            modelBuilder.Entity<TblProductType>(entity =>
+            {
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+                entity.Property(e => e.SupportsAllocation).HasDefaultValueSql("((0))");
+                entity.Property(e => e.SupportsProfitSharing).HasDefaultValueSql("((0))");
+            });
+
+            modelBuilder.Entity<TblProduct>(entity =>
+            {
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+                entity.Property(e => e.IsActive).HasDefaultValueSql("((1))");
+            });
+
+            modelBuilder.Entity<TblAssetType>(entity =>
+            {
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+                entity.Property(e => e.IsShariahCompliant).HasDefaultValueSql("((1))");
+            });
+
+            modelBuilder.Entity<TblAssetAllocation>(entity =>
+            {
+                entity.Property(e => e.TargetPercentage).HasPrecision(5, 2);
+                entity.Property(e => e.MinPercentage).HasPrecision(5, 2);
+                entity.Property(e => e.MaxPercentage).HasPrecision(5, 2);
+            });
+
+            modelBuilder.Entity<TblSystemSetting>(entity =>
+            {
+                entity.ToTable("TBL_SYSTEM_SETTING");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
             });
 
             OnModelCreatingPartial(modelBuilder);

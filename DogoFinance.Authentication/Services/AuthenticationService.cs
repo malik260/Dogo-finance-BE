@@ -44,18 +44,41 @@ namespace DogoFinance.Authentication.Services
                     return response;
                 }
 
-                if (user.IsActive != true)
+                if (user.IsActive == false)
                 {
-                    response.SetError("Your account is not active. Please verify your email.", 403);
+                    response.SetError("Your account is suspended or blocked. Please contact admin.", 403);
                     return response;
                 }
 
                 var userRole = await BaseRepository().FindEntity<TblUserRole>(ur => ur.UserId == user.UserId);
                 var roleName = "User";
+                var permissions = new List<string>();
+
                 if (userRole != null)
                 {
                     var role = await BaseRepository().FindEntity<TblRole>(r => r.Id == userRole.RoleId);
-                    roleName = role?.Name ?? "User";
+                    
+                    // Standardize role names for application authorization
+                    if (userRole.RoleId == 1) roleName = "SuperAdmin";
+                    else if (userRole.RoleId == 2) roleName = "Admin";
+                    else roleName = role?.Name ?? "User";
+                    
+                    // Fetch individual permissions for this role
+                    // FAIL-SAFE: SuperAdmin automatically gets all permissions
+                    if (userRole.RoleId == 1 || roleName == "SuperAdmin")
+                    {
+                        var allPermissions = await BaseRepository().FindList<TblAccessRight>(ar => true);
+                        permissions.AddRange(allPermissions.Select(ar => ar.Name));
+                    }
+                    else
+                    {
+                        var accessRights = await BaseRepository().FindList<TblRoleAccessRight>(ra => ra.RoleId == userRole.RoleId);
+                        foreach (var ra in accessRights)
+                        {
+                            var ar = await BaseRepository().FindEntity<TblAccessRight>(x => x.Id == ra.AccessRightId);
+                            if (ar != null) permissions.Add(ar.Name);
+                        }
+                    }
                 }
 
                 var customer = await _uow.Customers.GetByUserId(user.UserId);
@@ -86,8 +109,9 @@ namespace DogoFinance.Authentication.Services
                     tokenResponse.Expiry,
                     user.Email,
                     Role = roleName,
-                    FirstName = customer?.FirstName ?? "Dogo",
-                    LastName = customer?.LastName ?? "User",
+                    Permissions = permissions,
+                    FirstName = customer?.FirstName ?? user.FirstName ?? "Dogo",
+                    LastName = customer?.LastName ?? user.LastName ?? "User",
                     UserId = user.UserId,
                     CustomerId = customer?.CustomerId ?? 0,
                     SessionId = session.SessionId,
