@@ -18,6 +18,8 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public decimal MinPercentage { get; set; }
         [Column(TypeName = "decimal(18, 4)")]
         public decimal MaxPercentage { get; set; }
+        [Column(TypeName = "decimal(18, 4)")]
+        public decimal ExpectedReturn { get; set; }
 
         [ForeignKey("PortfolioId")]
         public virtual TblPortfolio Portfolio { get; set; } = null!;

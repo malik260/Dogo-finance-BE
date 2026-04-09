@@ -1,4 +1,4 @@
-﻿using DogoFinance.BusinessLogic.Layer.Response;
+using DogoFinance.BusinessLogic.Layer.Response;
 using DogoFinance.BusinessLogic.Layer.Models.Request;
 using DogoFinance.DataAccess.Layer.Interfaces;
 using DogoFinance.DataAccess.Layer.Models.Entities;
@@ -45,6 +45,7 @@ namespace DogoFinance.ProductManagement.Services
                 entity.TargetPercentage = model.TargetPercentage;
                 entity.MinPercentage = model.MinPercentage;
                 entity.MaxPercentage = model.MaxPercentage;
+                entity.ExpectedReturn = model.ExpectedReturn;
                 await _uow.Portfolios.SaveAllocationRule(entity);
                 response.SetMessage("Saved successfully", true);
             } catch (Exception ex) {

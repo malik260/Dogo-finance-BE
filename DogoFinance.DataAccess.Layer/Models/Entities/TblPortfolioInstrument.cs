@@ -12,12 +12,15 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public int Id { get; set; }
         public int PortfolioId { get; set; }
         public int InstrumentId { get; set; }
-        [Column(TypeName = "decimal(18, 4)")]
-        public decimal? TargetWeight { get; set; }
+        public int AssetClassId { get; set; }
+        [Column(TypeName = "decimal(5, 2)")]
+        public decimal TargetWeight { get; set; }
 
         [ForeignKey("PortfolioId")]
         public virtual TblPortfolio Portfolio { get; set; } = null!;
         [ForeignKey("InstrumentId")]
         public virtual TblInstrument Instrument { get; set; } = null!;
+        [ForeignKey("AssetClassId")]
+        public virtual TblAssetClass AssetClass { get; set; } = null!;
     }
 }

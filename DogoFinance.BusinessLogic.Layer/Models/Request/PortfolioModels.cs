@@ -44,8 +44,8 @@ namespace DogoFinance.BusinessLogic.Layer.Models.Request
     {
         public int Id { get; set; }
         public int PortfolioId { get; set; }
-        public int InstrumentId { get; set; }
-        public decimal? TargetWeight { get; set; }
+        public int AssetClassId { get; set; }
+        public decimal TargetWeight { get; set; }
     }
 
     public class PortfolioAllocationRuleDto
@@ -56,6 +56,7 @@ namespace DogoFinance.BusinessLogic.Layer.Models.Request
         public decimal TargetPercentage { get; set; }
         public decimal MinPercentage { get; set; }
         public decimal MaxPercentage { get; set; }
+        public decimal ExpectedReturn { get; set; }
     }
 
     public class InstrumentPriceDto

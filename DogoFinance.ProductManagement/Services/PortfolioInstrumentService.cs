@@ -1,4 +1,4 @@
-﻿using DogoFinance.BusinessLogic.Layer.Response;
+using DogoFinance.BusinessLogic.Layer.Response;
 using DogoFinance.BusinessLogic.Layer.Models.Request;
 using DogoFinance.DataAccess.Layer.Interfaces;
 using DogoFinance.DataAccess.Layer.Models.Entities;
@@ -43,6 +43,7 @@ namespace DogoFinance.ProductManagement.Services
                 if (entity == null) { response.SetError("Not found", 404); return response; }
                 entity.PortfolioId = model.PortfolioId;
                 entity.InstrumentId = model.InstrumentId;
+                entity.AssetClassId = model.AssetClassId;
                 entity.TargetWeight = model.TargetWeight;
                 await _uow.Portfolios.SavePortfolioInstrument(entity);
                 response.SetMessage("Saved successfully", true);
