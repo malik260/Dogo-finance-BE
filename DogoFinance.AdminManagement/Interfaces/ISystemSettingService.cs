@@ -1,7 +1,7 @@
 using DogoFinance.BusinessLogic.Layer.Response;
 using System.Threading.Tasks;
 
-namespace DogoFinance.ProductManagement.Interfaces
+namespace DogoFinance.AdminManagement.Interfaces
 {
     public interface ISystemSettingService
     {

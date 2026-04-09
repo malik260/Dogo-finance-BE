@@ -9,7 +9,8 @@ namespace DogoFinance.DataAccess.Layer.Repositories
     {
         public async Task<TblSystemSetting?> GetSystemSetting()
         {
-            return await BaseRepository().FindList<TblSystemSetting>().Result.FirstOrDefaultAsync();
+            var list = await BaseRepository().FindList<TblSystemSetting>();
+            return list.FirstOrDefault();
         }
 
         public async Task UpdateSystemSetting(TblSystemSetting setting)

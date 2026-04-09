@@ -11,7 +11,7 @@ namespace DogoFinance.DataAccess.Layer.Interfaces
         ITransactionRepository Transactions { get; }
         INextOfKinRepository NextOfKins { get; }
         ILedgerRepository Ledgers { get; }
-        IProductRepository Products { get; }
+        IPortfolioRepository Portfolios { get; }
         ISystemSettingRepository SystemSettings { get; }
     }
 }

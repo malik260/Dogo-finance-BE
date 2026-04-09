@@ -35,6 +35,7 @@ namespace DogoFinance.Api.Extensions
             services.AddScoped<IAuthenticationService, AuthenticationService>();
             services.AddScoped<IPinService, PinService>();
             services.AddScoped<IAdminService, AdminService>();
+            services.AddScoped<ISystemSettingService, SystemSettingService>();
             services.AddSingleton<JwtHelper>();
 
             // Register Monnify
@@ -42,13 +43,17 @@ namespace DogoFinance.Api.Extensions
 
             // Register Transaction Services
             services.AddScoped<ITransactionService, TransactionService>();
+            services.AddScoped<ICustomerPortfolioService, CustomerPortfolioService>();
+            services.AddScoped<ICustomerHoldingService, CustomerHoldingService>();
 
-            // Register Product Services
-            services.AddScoped<IProductService, ProductService>();
-            services.AddScoped<IProductTypeService, ProductTypeService>();
-            services.AddScoped<IAssetTypeService, AssetTypeService>();
-            services.AddScoped<IAssetAllocationService, AssetAllocationService>();
-            services.AddScoped<ISystemSettingService, SystemSettingService>();
+            // Register Portfolio & Product Services
+            services.AddScoped<IAssetClassService, AssetClassService>();
+            services.AddScoped<IPortfolioTypeService, PortfolioTypeService>();
+            services.AddScoped<IPortfolioService, PortfolioService>();
+            services.AddScoped<IInstrumentService, InstrumentService>();
+            services.AddScoped<IPortfolioInstrumentService, PortfolioInstrumentService>();
+            services.AddScoped<IPortfolioAllocationRuleService, PortfolioAllocationRuleService>();
+            services.AddScoped<IInstrumentPriceService, InstrumentPriceService>();
 
             // Register individual repositories if needed (Fintrak often does both)
             // services.AddScoped<IAccountRepository, AccountRepository>();

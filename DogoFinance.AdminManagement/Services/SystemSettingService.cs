@@ -1,12 +1,12 @@
 using DogoFinance.BusinessLogic.Layer.Response;
 using DogoFinance.DataAccess.Layer.Interfaces;
 using DogoFinance.DataAccess.Layer.Repositories.Base;
-using DogoFinance.ProductManagement.Interfaces;
+using DogoFinance.AdminManagement.Interfaces;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Threading.Tasks;
 
-namespace DogoFinance.ProductManagement.Services
+namespace DogoFinance.AdminManagement.Services
 {
     public class SystemSettingService : DataRepository, ISystemSettingService
     {

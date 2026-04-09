@@ -1,5 +1,5 @@
 using DogoFinance.BusinessLogic.Layer.Response;
-using DogoFinance.ProductManagement.Interfaces;
+using DogoFinance.AdminManagement.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 

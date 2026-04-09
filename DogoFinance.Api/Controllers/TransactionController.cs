@@ -11,11 +11,38 @@ namespace DogoFinance.Api.Controllers
     public class TransactionController : ControllerBase
     {
         private readonly ITransactionService _transactionService;
+        private readonly ICustomerPortfolioService _portfolioService;
+        private readonly ICustomerHoldingService _holdingService;
 
-        public TransactionController(ITransactionService transactionService)
+        public TransactionController(
+            ITransactionService transactionService,
+            ICustomerPortfolioService portfolioService,
+            ICustomerHoldingService holdingService)
         {
             _transactionService = transactionService;
+            _portfolioService = portfolioService;
+            _holdingService = holdingService;
         }
+
+        // --- Customer Portfolios ---
+        [HttpGet("portfolios/{customerId}")]
+        public async Task<ActionResult<ApiResponse>> GetCustomerPortfolios(long customerId) => Ok(await _portfolioService.GetByCustomer(customerId));
+
+        [HttpPost("portfolios")]
+        public async Task<ActionResult<ApiResponse>> SaveCustomerPortfolio(CustomerPortfolioDto model) => Ok(await _portfolioService.Save(model));
+
+        [HttpDelete("portfolios/{id}")]
+        public async Task<ActionResult<ApiResponse>> DeleteCustomerPortfolio(long id) => Ok(await _portfolioService.Delete(id));
+
+        // --- Customer Holdings ---
+        [HttpGet("holdings/{customerId}")]
+        public async Task<ActionResult<ApiResponse>> GetCustomerHoldings(long customerId) => Ok(await _holdingService.GetByCustomer(customerId));
+
+        [HttpPost("holdings")]
+        public async Task<ActionResult<ApiResponse>> SaveCustomerHolding(CustomerHoldingDto model) => Ok(await _holdingService.Save(model));
+
+        [HttpDelete("holdings/{id}")]
+        public async Task<ActionResult<ApiResponse>> DeleteCustomerHolding(long id) => Ok(await _holdingService.Delete(id));
 
         [HttpPost("deposit/initiate")]
         public async Task<ActionResult<ApiResponse>> InitiateDeposit([FromBody] InitiateDepositRequest request)
