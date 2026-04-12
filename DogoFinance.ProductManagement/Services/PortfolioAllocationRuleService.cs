@@ -7,6 +7,7 @@ using DogoFinance.ProductManagement.Interfaces;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Threading.Tasks;
+using DogoFinance.DataAccess.Layer.DTO;
 
 namespace DogoFinance.ProductManagement.Services
 {

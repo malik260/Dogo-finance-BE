@@ -23,4 +23,17 @@ namespace DogoFinance.BusinessLogic.Layer.Models.Request
         [StringLength(250)]
         public string? Address { get; set; }
     }
+    public class BvnVerificationRequest
+    {
+        [Required]
+        [StringLength(11)]
+        public string Bvn { get; set; } = null!;
+    }
+
+    public class NinVerificationRequest
+    {
+        [Required]
+        [StringLength(11)]
+        public string Nin { get; set; } = null!;
+    }
 }

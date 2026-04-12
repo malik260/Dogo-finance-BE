@@ -41,7 +41,7 @@ namespace DogoFinance.DataAccess.Layer.Interfaces.Base
         Task<int> UpdateAllFields<T>(T entity) where T : class;
 
         // ── Query ─────────────────────────────────────────────────────────
-        IQueryable<T> AsQueryable<T>(Expression<Func<T, bool>> condition) where T : class, new();
+        IQueryable<T> AsQueryable<T>(Expression<Func<T, bool>> condition = null) where T : class, new();
         Task<T?> FindEntity<T>(object keyValue) where T : class;
         Task<T?> FindEntity<T>(Expression<Func<T, bool>> condition) where T : class, new();
 

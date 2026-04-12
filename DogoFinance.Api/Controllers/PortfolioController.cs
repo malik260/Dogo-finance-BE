@@ -1,5 +1,6 @@
 using DogoFinance.BusinessLogic.Layer.Models.Request;
 using DogoFinance.BusinessLogic.Layer.Response;
+using DogoFinance.DataAccess.Layer.DTO;
 using DogoFinance.ProductManagement.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
@@ -52,6 +53,9 @@ namespace DogoFinance.Api.Controllers
 
         [HttpPost("types")]
         public async Task<ActionResult<ApiResponse>> SavePortfolioType(PortfolioTypeDto model) => Ok(await _portfolioTypeService.Save(model));
+
+        [HttpDelete("types/{id}")]
+        public async Task<ActionResult<ApiResponse>> DeletePortfolioType(int id) => Ok(await _portfolioTypeService.Delete(id));
 
         // --- Portfolio ---
         [HttpGet]

@@ -235,9 +235,12 @@ namespace DogoFinance.DataAccess.Layer.Repositories.Base
 
         // ── Query ─────────────────────────────────────────────────────────
 
-        public IQueryable<T> AsQueryable<T>(Expression<Func<T, bool>> condition)
+        public IQueryable<T> AsQueryable<T>(Expression<Func<T, bool>> condition = null)
             where T : class, new()
-            => _context.Set<T>().Where(condition);
+        {
+            var query = _context.Set<T>().AsQueryable();
+            return condition == null ? query : query.Where(condition);
+        }
 
         public async Task<T?> FindEntity<T>(object keyValue) where T : class
             => await _context.Set<T>().FindAsync(keyValue);

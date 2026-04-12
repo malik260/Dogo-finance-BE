@@ -1,3 +1,4 @@
+using DogoFinance.DataAccess.Layer.Interfaces.Base;
 using DogoFinance.DataAccess.Layer.Repositories.Base;
 
 namespace DogoFinance.DataAccess.Layer.Repositories.Base
@@ -9,9 +10,14 @@ namespace DogoFinance.DataAccess.Layer.Repositories.Base
     /// </summary>
     public abstract class DataRepository
     {
-        private DbRepository? _repository;
+        private IDbRepository? _repository;
 
-        protected DbRepository BaseRepository()
+        public void SetSharedRepository(IDbRepository repository)
+        {
+            _repository = repository;
+        }
+
+        protected IDbRepository BaseRepository()
             => _repository ??= new DbRepository(new DogoDbContext());
     }
 }

@@ -9,6 +9,8 @@ using DogoFinance.DataAccess.Layer.Repositories.Base;
 using DogoFinance.Integration.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using DogoFinance.TransactionManagement.Interfaces;
+using DogoFinance.Integration.Models.Monnify;
 
 namespace DogoFinance.CustomerManagement.Services
 {
@@ -18,13 +20,17 @@ namespace DogoFinance.CustomerManagement.Services
         private readonly IEmailService _emailService;
         private readonly ILogger<CustomerService> _logger;
         private readonly IConfiguration _configuration;
+        private readonly ITransactionService _transactionService;
+        private readonly IMonnifyService _monnifyService;
 
-        public CustomerService(IUnitOfWork uow, IEmailService emailService, ILogger<CustomerService> logger, IConfiguration configuration)
+        public CustomerService(IUnitOfWork uow, IEmailService emailService, ILogger<CustomerService> logger, IConfiguration configuration, ITransactionService transactionService, IMonnifyService monnifyService)
         {
             _uow = uow;
             _emailService = emailService;
             _logger = logger;
             _configuration = configuration;
+            _transactionService = transactionService;
+            _monnifyService = monnifyService;
         }
 
         public async Task<ApiResponse> SignUp(SignUpRequest request)
@@ -89,6 +95,16 @@ namespace DogoFinance.CustomerManagement.Services
                     RoleId = (int)UserRole.Customer
                 };
                 await BaseRepository().Insert(userRole);
+
+                // Create Virtual Account (Reserved Account)
+                try
+                {
+                    await _transactionService.CreateVirtualAccount(user.UserId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to create virtual account during signup for {Email}", request.Email);
+                }
 
                 var baseUrl = _configuration["SystemConfig:FrontendBaseUrl"] ?? "http://localhost:4200";
                 var verificationLink = $"{baseUrl}/verify-email?email={Uri.EscapeDataString(user.Email)}&code={verificationCode}";
@@ -246,6 +262,79 @@ namespace DogoFinance.CustomerManagement.Services
                 Data = todoList,
                 Message = "Todo list retrieved successfully"
             };
+        }
+
+        public async Task<ApiResponse> VerifyBvn(long customerId, BvnVerificationRequest request)
+        {
+            var customer = await _uow.Customers.GetCustomerDetailed(customerId);
+            if (customer == null) return new ApiResponse { Message = "Customer not found", Status = 404 };
+
+            if (customer.Bvnverified) return new ApiResponse { Success = true, Message = "BVN already verified", Boolean = true };
+
+            var monnifyRequest = new BvnMatchRequest
+            {
+                bvn = request.Bvn,
+                name = $"{customer.FirstName} {customer.LastName}",
+                dateOfBirth = customer.DateOfBirth.ToString("dd-MMM-yyyy"),
+                mobileNo = customer.PhoneNumber ?? ""
+            };
+
+            var monnifyResponse = await _monnifyService.VerifyBvnMatch(monnifyRequest);
+
+            if (monnifyResponse != null && monnifyResponse.requestSuccessful)
+            {
+                // Successful match logic
+                // Typically score > 60 is a good match
+                if (monnifyResponse.responseBody.name.match || monnifyResponse.responseBody.name.score > 60)
+                {
+                    customer.Bvn = request.Bvn;
+                    customer.Bvnverified = true;
+                    customer.BvnverifiedAt = DateTime.UtcNow;
+                    customer.ModifiedAt = DateTime.UtcNow;
+
+                    await _uow.Customers.SaveCustomer(customer);
+
+                    return new ApiResponse { Success = true, Message = "BVN verified successfully", Boolean = true };
+                }
+                
+                return new ApiResponse { Message = "BVN information mismatch. Please ensure details match your bank records.", Status = 400 };
+            }
+
+            return new ApiResponse { Message = monnifyResponse?.responseMessage ?? "BVN verification failed", Status = 400 };
+        }
+
+        public async Task<ApiResponse> VerifyNin(long customerId, NinVerificationRequest request)
+        {
+            var customer = await _uow.Customers.GetCustomerDetailed(customerId);
+            if (customer == null) return new ApiResponse { Message = "Customer not found", Status = 404 };
+
+            if (customer.Ninverified) return new ApiResponse { Success = true, Message = "NIN already verified", Boolean = true };
+
+            var monnifyRequest = new NinVerifyRequest { nin = request.Nin };
+            var monnifyResponse = await _monnifyService.VerifyNin(monnifyRequest);
+
+            if (monnifyResponse != null && monnifyResponse.requestSuccessful)
+            {
+                // Check if name matches (simplified)
+                var firstNameMatch = monnifyResponse.responseBody.firstname.Contains(customer.FirstName, StringComparison.OrdinalIgnoreCase);
+                var lastNameMatch = monnifyResponse.responseBody.lastname.Contains(customer.LastName, StringComparison.OrdinalIgnoreCase);
+
+                if (firstNameMatch || lastNameMatch)
+                {
+                    customer.Nin = request.Nin;
+                    customer.Ninverified = true;
+                    customer.NinverifiedAt = DateTime.UtcNow;
+                    customer.ModifiedAt = DateTime.UtcNow;
+
+                    await _uow.Customers.SaveCustomer(customer);
+
+                    return new ApiResponse { Success = true, Message = "NIN verified successfully", Boolean = true };
+                }
+
+                return new ApiResponse { Message = "NIN identity mismatch.", Status = 400 };
+            }
+
+            return new ApiResponse { Message = monnifyResponse?.responseMessage ?? "NIN verification failed", Status = 400 };
         }
     }
 }

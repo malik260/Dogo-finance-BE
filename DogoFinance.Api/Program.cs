@@ -42,31 +42,41 @@ builder.Services.AddAuthentication(options =>
         OnAuthenticationFailed = context =>
         {
             Console.WriteLine("--- JWT Auth Failed ---");
-            Console.WriteLine($"Message: {context.Exception.Message}");
-            Console.WriteLine($"Auth Header: {context.Request.Headers["Authorization"]}");
+            Console.WriteLine($"Message: {context.Exception?.Message ?? "No exception details"}");
+            if (context.Exception is System.IO.IOException)
+            {
+                Console.WriteLine("CRITICAL: Detected potential database pipe/connection issue during authentication.");
+            }
             return Task.CompletedTask;
         },
         OnTokenValidated = async context =>
         {
-            var uow = context.HttpContext.RequestServices.GetRequiredService<IUnitOfWork>();
-            var userIdStr = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
-            
-            if (long.TryParse(userIdStr, out long userId))
+            try 
             {
-                var user = await uow.Users.GetById(userId);
+                var uow = context.HttpContext.RequestServices.GetRequiredService<IUnitOfWork>();
+                var userIdStr = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
                 
-                // Properly extract iat from the token
-                var jwtToken = context.SecurityToken as JwtSecurityToken;
-                var iatStr = jwtToken?.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Iat)?.Value;
-                
-                if (user != null && user.LastLogoutDate.HasValue && long.TryParse(iatStr, out long iat))
+                if (long.TryParse(userIdStr, out long userId))
                 {
-                    var iatDateTime = DateTimeOffset.FromUnixTimeSeconds(iat).UtcDateTime;
-                    if (iatDateTime <= user.LastLogoutDate.Value.AddSeconds(-1))
+                    var user = await uow.Users.GetById(userId);
+                    
+                    var jwtToken = context.SecurityToken as JwtSecurityToken;
+                    var iatStr = jwtToken?.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Iat)?.Value;
+                    
+                    if (user != null && user.LastLogoutDate.HasValue && long.TryParse(iatStr, out long iat))
                     {
-                        // context.Fail("Token has been revoked by logout.");
+                        var iatDateTime = DateTimeOffset.FromUnixTimeSeconds(iat).UtcDateTime;
+                        if (iatDateTime <= user.LastLogoutDate.Value.AddSeconds(-1))
+                        {
+                            context.Fail("Token has been revoked by logout.");
+                        }
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ERROR in Token Validation (DB Match): {ex.Message}");
+                // We don't fail the context here necessarily, or we could context.Fail() if DB is required.
             }
         }
     };

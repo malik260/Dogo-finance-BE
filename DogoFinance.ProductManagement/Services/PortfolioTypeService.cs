@@ -1,5 +1,6 @@
-﻿using DogoFinance.BusinessLogic.Layer.Response;
+using DogoFinance.BusinessLogic.Layer.Response;
 using DogoFinance.BusinessLogic.Layer.Models.Request;
+using DogoFinance.DataAccess.Layer.DTO;
 using DogoFinance.DataAccess.Layer.Interfaces;
 using DogoFinance.DataAccess.Layer.Models.Entities;
 using DogoFinance.DataAccess.Layer.Repositories.Base;
@@ -46,7 +47,17 @@ namespace DogoFinance.ProductManagement.Services
                 if (entity == null) { response.SetError("Not found", 404); return response; }
 
                 entity.Name = model.Name;
-                entity.Code = model.Code;
+                
+                // Auto-generate code if empty
+                if (string.IsNullOrEmpty(model.Code))
+                {
+                    entity.Code = model.Name.Replace(" ", "_").ToUpper();
+                }
+                else
+                {
+                    entity.Code = model.Code;
+                }
+
                 entity.SupportsAllocation = model.SupportsAllocation;
                 
                 if (model.PortfolioTypeId == 0) entity.CreatedAt = DateTime.UtcNow;

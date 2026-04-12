@@ -1,64 +1,12 @@
 using System;
+using DogoFinance.DataAccess.Layer.DTO;
 
 namespace DogoFinance.BusinessLogic.Layer.Models.Request
 {
-    public class AssetClassDto
-    {
-        public int AssetClassId { get; set; }
-        public string Name { get; set; } = null!;
-        public string Code { get; set; } = null!;
-        public bool IsShariahCompliant { get; set; }
-    }
-
-    public class PortfolioTypeDto
-    {
-        public int PortfolioTypeId { get; set; }
-        public string Name { get; set; } = null!;
-        public string Code { get; set; } = null!;
-        public bool SupportsAllocation { get; set; }
-    }
-
-    public class PortfolioDto
-    {
-        public int PortfolioId { get; set; }
-        public string Name { get; set; } = null!;
-        public string Code { get; set; } = null!;
-        public int PortfolioTypeId { get; set; }
-        public string? RiskLevel { get; set; }
-        public string? Description { get; set; }
-        public decimal? ExpectedAnnualReturn { get; set; }
-        public bool IsActive { get; set; }
-    }
-
-    public class InstrumentDto
-    {
-        public int InstrumentId { get; set; }
-        public string Name { get; set; } = null!;
-        public string? Code { get; set; }
-        public int AssetClassId { get; set; }
-        public bool IsShariahCompliant { get; set; }
-        public bool IsActive { get; set; }
-    }
-
-    public class PortfolioInstrumentDto
-    {
-        public int Id { get; set; }
-        public int PortfolioId { get; set; }
-        public int AssetClassId { get; set; }
-        public decimal TargetWeight { get; set; }
-    }
-
-    public class PortfolioAllocationRuleDto
-    {
-        public int Id { get; set; }
-        public int PortfolioId { get; set; }
-        public int AssetClassId { get; set; }
-        public decimal TargetPercentage { get; set; }
-        public decimal MinPercentage { get; set; }
-        public decimal MaxPercentage { get; set; }
-        public decimal ExpectedReturn { get; set; }
-    }
-
+    // These DTOs have been moved to DataAccess.Layer.DTO to avoid circular dependencies.
+    // We import them here so existing business logic services can still find them in the expected namespace
+    // or we can update the services to import the new namespace.
+    
     public class InstrumentPriceDto
     {
         public int Id { get; set; }

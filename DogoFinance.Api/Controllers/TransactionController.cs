@@ -1,6 +1,7 @@
 using DogoFinance.BusinessLogic.Layer.Models.Request;
 using DogoFinance.BusinessLogic.Layer.Response;
 using DogoFinance.TransactionManagement.Interfaces;
+using DogoFinance.DataAccess.Layer.DTO;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
@@ -13,15 +14,45 @@ namespace DogoFinance.Api.Controllers
         private readonly ITransactionService _transactionService;
         private readonly ICustomerPortfolioService _portfolioService;
         private readonly ICustomerHoldingService _holdingService;
+        private readonly ICustomerInvestmentService _investmentService;
 
         public TransactionController(
             ITransactionService transactionService,
             ICustomerPortfolioService portfolioService,
-            ICustomerHoldingService holdingService)
+            ICustomerHoldingService holdingService,
+            ICustomerInvestmentService investmentService)
         {
             _transactionService = transactionService;
             _portfolioService = portfolioService;
             _holdingService = holdingService;
+            _investmentService = investmentService;
+        }
+
+        [HttpPost("invest")]
+        public async Task<ActionResult<ApiResponse>> Invest([FromBody] InvestRequestDto model)
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
+
+            return Ok(await _investmentService.InvestAsync(model, long.Parse(userIdStr)));
+        }
+
+        [HttpPost("sell")]
+        public async Task<ActionResult<ApiResponse>> Sell([FromBody] SellRequestDto model)
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
+
+            return Ok(await _investmentService.SellAsync(model, long.Parse(userIdStr)));
+        }
+
+        [HttpGet("portfolioSummary")]
+        public async Task<ActionResult<ApiResponse>> GetSummary()
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
+
+            return Ok(await _investmentService.GetPortfolioSummary(long.Parse(userIdStr)));
         }
 
         // --- Customer Portfolios ---
@@ -52,11 +83,47 @@ namespace DogoFinance.Api.Controllers
             return StatusCode(response.Status, response);
         }
 
+        [HttpPost("deposit/charge")]
+        public async Task<ActionResult<ApiResponse>> ChargeCard([FromBody] MonnifyChargeRequest request)
+        {
+            var response = await _transactionService.ChargeCard(request);
+            if (response.Boolean) return Ok(response);
+            return StatusCode(response.Status, response);
+        }
+
+        [HttpPost("deposit/authorize")]
+        public async Task<ActionResult<ApiResponse>> AuthorizeDeposit([FromBody] MonnifyAuthorizeRequest request)
+        {
+            var response = await _transactionService.AuthorizeDeposit(request);
+            if (response.Boolean) return Ok(response);
+            return StatusCode(response.Status, response);
+        }
+
         [HttpPost("deposit/confirm/{reference}")]
-        public async Task<ActionResult<ApiResponse>> ConfirmDeposit(string reference)
+        public async Task<IActionResult> ConfirmDeposit(string reference)
         {
             var response = await _transactionService.ConfirmDeposit(reference);
-            if (response.Boolean) return Ok(response);
+            return StatusCode(response.Status, response);
+        }
+
+        [HttpPost("webhook/monnify")]
+        public async Task<IActionResult> MonnifyWebhook()
+        {
+            var signature = Request.Headers["X-Monnify-Signature"].ToString();
+            using var reader = new StreamReader(Request.Body);
+            var payload = await reader.ReadToEndAsync();
+
+            var response = await _transactionService.HandleMonnifyWebhook(payload, signature);
+            return StatusCode(response.Status, response);
+        }
+
+        [HttpGet("deposit/virtual-account")]
+        public async Task<IActionResult> GetVirtualAccount()
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
+            
+            var response = await _transactionService.CreateVirtualAccount(long.Parse(userIdStr));
             return StatusCode(response.Status, response);
         }
 

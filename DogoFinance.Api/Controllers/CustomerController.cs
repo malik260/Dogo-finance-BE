@@ -71,6 +71,22 @@ namespace DogoFinance.Api.Controllers
             return StatusCode(response.Status, response);
         }
 
+        [HttpPost("{customerId}/verify-bvn")]
+        public async Task<ActionResult<ApiResponse>> VerifyBvn(long customerId, [FromBody] BvnVerificationRequest request)
+        {
+            var response = await _customerService.VerifyBvn(customerId, request);
+            if (response.Boolean) return Ok(response);
+            return StatusCode(response.Status, response);
+        }
+
+        [HttpPost("{customerId}/verify-nin")]
+        public async Task<ActionResult<ApiResponse>> VerifyNin(long customerId, [FromBody] NinVerificationRequest request)
+        {
+            var response = await _customerService.VerifyNin(customerId, request);
+            if (response.Boolean) return Ok(response);
+            return StatusCode(response.Status, response);
+        }
+
         [HttpGet("relationship-types")]
         public async Task<ActionResult<ApiResponse>> GetRelationshipTypes()
         {

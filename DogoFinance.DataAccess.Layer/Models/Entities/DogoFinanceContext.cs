@@ -49,6 +49,8 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public virtual DbSet<TblInstrumentPrice> TblInstrumentPrices { get; set; } = null!;
         public virtual DbSet<TblCustomerPortfolio> TblCustomerPortfolios { get; set; } = null!;
         public virtual DbSet<TblCustomerHolding> TblCustomerHoldings { get; set; } = null!;
+        public virtual DbSet<TblInvestmentTransaction> TblInvestmentTransactions { get; set; } = null!;
+        public virtual DbSet<TblReservedAccount> TblReservedAccounts { get; set; } = null!;
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -307,6 +309,10 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
             });
 
             modelBuilder.Entity<TblInstrumentPrice>(entity => {
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            });
+
+            modelBuilder.Entity<TblInvestmentTransaction>(entity => {
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
             });
 

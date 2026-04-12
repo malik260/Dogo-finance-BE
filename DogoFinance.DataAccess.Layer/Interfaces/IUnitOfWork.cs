@@ -13,5 +13,11 @@ namespace DogoFinance.DataAccess.Layer.Interfaces
         ILedgerRepository Ledgers { get; }
         IPortfolioRepository Portfolios { get; }
         ISystemSettingRepository SystemSettings { get; }
+        IReservedAccountRepository ReservedAccounts { get; }
+        
+        Task<int> SaveChangesAsync();
+        Task BeginTransactionAsync();
+        Task CommitAsync();
+        Task RollbackAsync();
     }
 }

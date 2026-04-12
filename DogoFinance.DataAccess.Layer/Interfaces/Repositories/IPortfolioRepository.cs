@@ -1,3 +1,4 @@
+using DogoFinance.DataAccess.Layer.DTO;
 using DogoFinance.DataAccess.Layer.Models.Entities;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -20,12 +21,14 @@ namespace DogoFinance.DataAccess.Layer.Interfaces.Repositories
 
         // Portfolio
         Task<IEnumerable<TblPortfolio>> GetPortfolios();
+        Task<IEnumerable<TblPortfolio>> GetPortfoliosDetailed();
         Task<TblPortfolio?> GetPortfolioById(int id);
         Task SavePortfolio(TblPortfolio portfolio);
         Task DeletePortfolio(int id);
 
         // Instrument
         Task<IEnumerable<TblInstrument>> GetInstruments();
+        Task<IEnumerable<InstrumentDto>> GetInstrumentsDetailed();
         Task<TblInstrument?> GetInstrumentById(int id);
         Task SaveInstrument(TblInstrument instrument);
         Task DeleteInstrument(int id);
@@ -51,13 +54,23 @@ namespace DogoFinance.DataAccess.Layer.Interfaces.Repositories
         // Customer Portfolio
         Task<IEnumerable<TblCustomerPortfolio>> GetCustomerPortfolios(long customerId);
         Task<TblCustomerPortfolio?> GetCustomerPortfolioById(long id);
+        Task<TblCustomerPortfolio?> GetCustomerPortfolio(long customerId, int portfolioId);
         Task SaveCustomerPortfolio(TblCustomerPortfolio cp);
         Task DeleteCustomerPortfolio(long id);
 
         // Customer Holding
         Task<IEnumerable<TblCustomerHolding>> GetCustomerHoldings(long customerId);
         Task<TblCustomerHolding?> GetCustomerHoldingById(long id);
+        Task<TblCustomerHolding?> GetCustomerHolding(long customerId, int instrumentId);
         Task SaveCustomerHolding(TblCustomerHolding ch);
         Task DeleteCustomerHolding(long id);
+
+        // Investment Helpers
+        Task<IEnumerable<TblPortfolioInstrument>> GetInstrumentsDetailed(int portfolioId);
+        Task<decimal> GetLatestNAV(int instrumentId);
+        Task SaveInvestmentTransaction(TblInvestmentTransaction tx);
+
+        Task<PortfolioSummaryDto> GetPortfolioSummaryMetrics(long customerId);
+        Task<TblInstrumentPrice> GetInstrumentPriceInfo(int instrumentId);
     }
 }

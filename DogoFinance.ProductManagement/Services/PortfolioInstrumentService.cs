@@ -7,6 +7,7 @@ using DogoFinance.ProductManagement.Interfaces;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Threading.Tasks;
+using DogoFinance.DataAccess.Layer.DTO;
 
 namespace DogoFinance.ProductManagement.Services
 {
@@ -44,7 +45,7 @@ namespace DogoFinance.ProductManagement.Services
                 entity.PortfolioId = model.PortfolioId;
                 entity.InstrumentId = model.InstrumentId;
                 entity.AssetClassId = model.AssetClassId;
-                entity.TargetWeight = model.TargetWeight;
+                entity.TargetWeight = model.Percentage;
                 await _uow.Portfolios.SavePortfolioInstrument(entity);
                 response.SetMessage("Saved successfully", true);
             } catch (Exception ex) {

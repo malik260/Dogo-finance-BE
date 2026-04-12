@@ -45,6 +45,7 @@ namespace DogoFinance.Api.Extensions
             services.AddScoped<ITransactionService, TransactionService>();
             services.AddScoped<ICustomerPortfolioService, CustomerPortfolioService>();
             services.AddScoped<ICustomerHoldingService, CustomerHoldingService>();
+            services.AddScoped<ICustomerInvestmentService, CustomerInvestmentService>();
 
             // Register Portfolio & Product Services
             services.AddScoped<IAssetClassService, AssetClassService>();

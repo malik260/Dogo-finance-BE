@@ -14,12 +14,12 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public string Name { get; set; } = null!;
         [StringLength(100)]
         public string? Code { get; set; }
-        public int AssetClassId { get; set; }
+        //public int AssetClassId { get; set; }
         public bool IsShariahCompliant { get; set; }
         public bool IsActive { get; set; }
         public DateTime CreatedAt { get; set; }
 
-        [ForeignKey("AssetClassId")]
-        public virtual TblAssetClass AssetClass { get; set; } = null!;
+        //[ForeignKey("AssetClassId")]
+        //public virtual TblAssetClass AssetClass { get; set; } = null!;
     }
 }

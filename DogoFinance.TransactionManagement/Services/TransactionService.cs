@@ -10,6 +10,7 @@ using DogoFinance.Integration.Models.Monnify;
 using DogoFinance.TransactionManagement.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using System.Text.Json;
 
 namespace DogoFinance.TransactionManagement.Services
 {
@@ -68,12 +69,12 @@ namespace DogoFinance.TransactionManagement.Services
             var baseUrl = _configuration["SystemConfig:FrontendBaseUrl"] ?? "https://app.dogofinance.com";
             var monnifyRequest = new InitializeTransactionRequest
             {
-                Amount = amount,
-                CustomerName = $"{customer.FirstName} {customer.LastName}",
-                CustomerEmail = user.Email,
-                PaymentReference = reference,
-                PaymentDescription = "Wallet Deposit",
-                RedirectUrl = $"{baseUrl}/deposit-success"
+                amount = amount,
+                customerName = $"{customer.FirstName} {customer.LastName}",
+                customerEmail = user.Email,
+                paymentReference = reference,
+                paymentDescription = "Wallet Deposit",
+                redirectUrl = $"{baseUrl}/deposit-success"
             };
 
             var monnifyResult = await _monnifyService.InitializeTransaction(monnifyRequest);
@@ -92,59 +93,289 @@ namespace DogoFinance.TransactionManagement.Services
             return response;
         }
 
+        public async Task<ApiResponse> ChargeCard(MonnifyChargeRequest request)
+        {
+            var response = new ApiResponse();
+            var monnifyRequest = new CardChargeRequest
+            {
+                transactionReference = request.Reference,
+                card = new CardDetails
+                {
+                    number = request.CardNumber,
+                    expiryMonth = request.ExpiryMonth,
+                    expiryYear = request.ExpiryYear,
+                    cvv = request.CVV,
+                    pin = request.Pin
+                }
+            };
+
+            var result = await _monnifyService.ChargeCard(monnifyRequest);
+            if (result != null)
+            {
+                response.SetMessage("Charge initiated", true, result);
+            }
+            else
+            {
+                response.SetError("Failed to initiate card charge", 400);
+            }
+            return response;
+        }
+
+        public async Task<ApiResponse> AuthorizeDeposit(MonnifyAuthorizeRequest request)
+        {
+            var response = new ApiResponse();
+            var authorizeReq = new AuthorizeOtpRequest
+            {
+                TransactionReference = request.Reference,
+                TokenId = request.Otp
+            };
+
+            var success = await _monnifyService.AuthorizeOtp(authorizeReq);
+            if (success)
+            {
+                // Note: We don't credit yet. We wait for confirmation or verify after some time.
+                // Or we can verify right now if the capture is immediate.
+                response.SetMessage("Authorization successful", true);
+            }
+            else
+            {
+                response.SetError("Authorization failed or OTP invalid", 400);
+            }
+            return response;
+        }
+
         public async Task<ApiResponse> ConfirmDeposit(string reference)
         {
             var response = new ApiResponse();
-            var db = await BaseRepository().BeginTrans();
-
             try
             {
+                var monnifyVerify = await _monnifyService.VerifyTransaction(reference);
+                if (monnifyVerify == null || monnifyVerify.ResponseBody.PaymentStatus != "PAID")
+                {
+                    response.SetError("Payment not verified with provider", 400);
+                    return response;
+                }
+
+                await _uow.BeginTransactionAsync();
                 var payment = await _uow.Payments.GetByReference(reference);
-                if (payment == null) return new ApiResponse { Message = "Payment reference not found", Status = 404 };
-                if (payment.Status == "SUCCESS") return new ApiResponse { Message = "Payment already processed", Success = true };
+                if (payment == null) { response.SetError("Payment records not found", 404); return response; }
 
-                payment.Status = "SUCCESS";
-                await _uow.Payments.SavePayment(payment);
+                if (payment.Status == "Completed" || payment.Status == "SUCCESS")
+                {
+                    response.SetMessage("Success", 200);
+                    return response;
+                }
 
-                var customer = await BaseRepository().FindEntity<TblCustomer>(c => c.UserId == payment.UserId);
+                var customer = await _uow.Customers.GetByUserId(payment.UserId);
                 if (customer == null) throw new Exception("Customer not linked to user");
 
                 var wallet = await _uow.Wallets.GetByCustomerId(customer.CustomerId);
-                if (wallet == null)
-                {
-                    wallet = new TblWallet { CustomerId = customer.CustomerId, Balance = 0, WalletNumber = "W" + DateTime.UtcNow.Ticks.ToString().Substring(0, 9), Currency = 1, IsActive = true, CreatedAt = DateTime.UtcNow };
-                    await _uow.Wallets.CreateWallet(wallet);
-                }
+                if (wallet == null) { response.SetError("Wallet not found", 404); return response; }
 
+                // Credit Wallet
                 wallet.Balance += payment.Amount;
                 await _uow.Wallets.UpdateWallet(wallet);
 
+                // Update Payment
+                payment.Status = "Completed";
+                //payment.ModifiedAt = DateTime.UtcNow;
+                await _uow.Payments.SavePayment(payment);
+
+                // Create Transaction
                 var transaction = new TblTransaction
                 {
                     Reference = reference,
                     TransactionType = TransactionType.DEPOSIT,
                     Amount = payment.Amount,
                     Status = 1, // SUCCESS
-                    Narration = "Account Credited",
+                    Narration = "Wallet Deposit (Confirmed)",
                     PaymentId = payment.Id,
                     InitiatedByUserId = payment.UserId,
                     CreatedAt = DateTime.UtcNow
                 };
                 await _uow.Transactions.CreateTransaction(transaction);
 
-                // LEDGER LOGGING
-                await LogLedger(transaction.TransactionId, wallet.WalletId, EntryType.CREDIT, payment.Amount, wallet.Balance, "Deposit via Monnify");
+                // Log Ledger
+                await LogLedger(transaction.TransactionId, wallet.WalletId, EntryType.CREDIT, payment.Amount, wallet.Balance, "Deposit via Card");
 
-                await BaseRepository().CommitTrans();
-                response.SetMessage("Deposit successful", true);
-                return response;
+                await _uow.CommitAsync();
+                response.SetMessage("Wallet credited successfully", 200);
             }
             catch (Exception ex)
             {
-                await BaseRepository().RollbackTrans();
-                _logger.LogError(ex, "Deposit Confirmation Error for {Ref}", reference);
-                response.SetError("Internal error during confirmation", 500);
-                return response;
+                await _uow.RollbackAsync();
+                response.SetError(ex.Message, 500);
+            }
+            return response;
+        }
+
+        public async Task<ApiResponse> CreateVirtualAccount(long userId)
+        {
+            var response = new ApiResponse();
+            try
+            {
+                var user = await _uow.Users.GetById(userId);
+                if (user == null) { response.SetError("User not found", 404); return response; }
+                var customer = await _uow.Customers.GetByUserId(userId);
+
+                var existing = await _uow.ReservedAccounts.GetByUserId(userId);
+                if (existing != null)
+                {
+                    response.SetMessage("Existing account found", 200, existing);
+                    return response;
+                }
+
+                var request = new CreateReservedAccountRequest
+                {
+                    accountReference = $"DOGO-{userId}-{Guid.NewGuid().ToString().Substring(0, 8)}",
+                    accountName = $"{customer.FirstName} {customer.LastName}",
+                    customerEmail = user.Email,
+                    customerName = $"{customer.FirstName} {customer.LastName}",
+                    getAllAvailableBanks = true
+                };
+
+                var monnifyResult = await _monnifyService.CreateReservedAccount(request);
+                if (monnifyResult == null || !monnifyResult.requestSuccessful)
+                {
+                    response.SetError("Failed to create reserved account", 400);
+                    return response;
+                }
+
+                var body = monnifyResult.responseBody;
+                if (body.accounts == null || body.accounts.Count == 0)
+                {
+                    response.SetError("No bank accounts returned from provider", 400);
+                    return response;
+                }
+
+                // Save first account
+                var mainAcc = body.accounts[0];
+                var accountEntity = new TblReservedAccount
+                {
+                    UserId = userId,
+                    AccountReference = body.accountReference,
+                    AccountNumber = mainAcc.accountNumber,
+                    BankName = mainAcc.bankName,
+                    BankCode = mainAcc.bankCode,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _uow.ReservedAccounts.SaveReservedAccount(accountEntity);
+                await _uow.SaveChangesAsync();
+
+                response.SetMessage("Virtual account created successfully", 200, accountEntity);
+            }
+            catch (Exception ex)
+            {
+                response.SetError(ex.Message, 500);
+            }
+            return response;
+        }
+
+        public async Task<ApiResponse> HandleMonnifyWebhook(string payload, string signature)
+        {
+            var response = new ApiResponse();
+            try
+            {
+                if (!IsValidSignature(payload, signature))
+                {
+                    response.SetError("Invalid signature", 401);
+                    return response;
+                }
+
+                var data = JsonSerializer.Deserialize<MonnifyWebhookPayload>(payload);
+                if (data == null || data.eventType != "SUCCESSFUL_TRANSACTION")
+                {
+                    response.Status = 200;
+                    return response;
+                }
+
+                var eventData = data.eventData;
+
+                // Check duplicate
+                var existingPayment = await _uow.Payments.GetByReference(eventData.paymentReference);
+                if (existingPayment != null && (existingPayment.Status == "Completed" || existingPayment.Status == "SUCCESS"))
+                {
+                    response.Status = 200;
+                    return response;
+                }
+
+                var reservedAcc = await _uow.ReservedAccounts.GetByAccountReference(eventData.accountReference);
+                if (reservedAcc == null)
+                {
+                    response.SetError("Reserved account not found", 404);
+                    return response;
+                }
+
+                var customer = await _uow.Customers.GetByUserId(reservedAcc.UserId);
+                if (customer == null) { response.SetError("Customer records missing", 404); return response; }
+
+                var wallet = await _uow.Wallets.GetByCustomerId(customer.CustomerId);
+                if (wallet == null) { response.SetError("Wallet not found", 404); return response; }
+
+                await _uow.BeginTransactionAsync();
+
+                // Credit Wallet
+                wallet.Balance += eventData.amountPaid;
+                await _uow.Wallets.UpdateWallet(wallet);
+
+                // Create or update payment log
+                if (existingPayment == null)
+                {
+                    existingPayment = new TblPayment
+                    {
+                        UserId = customer.UserId,
+                        Amount = eventData.amountPaid,
+                        ProviderReference = eventData.paymentReference,
+                        Status = "Completed",
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _uow.Payments.SavePayment(existingPayment);
+                }
+                else
+                {
+                    existingPayment.Status = "Completed";
+                    await _uow.Payments.SavePayment(existingPayment);
+                }
+
+                // Create Transaction
+                var transaction = new TblTransaction
+                {
+                    Reference = eventData.paymentReference,
+                    TransactionType = TransactionType.DEPOSIT,
+                    Amount = eventData.amountPaid,
+                    Status = 1, // SUCCESS
+                    Narration = "Transfer Deposit Received",
+                    PaymentId = existingPayment.Id,
+                    InitiatedByUserId = customer.UserId,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _uow.Transactions.CreateTransaction(transaction);
+
+                // Ledger Entry
+                await LogLedger(transaction.TransactionId, wallet.WalletId, EntryType.CREDIT, eventData.amountPaid, wallet.Balance, "Bank Transfer Deposit");
+
+                await _uow.CommitAsync();
+                response.SetMessage("Webhook processed successfully", 200);
+            }
+            catch (Exception ex)
+            {
+                await _uow.RollbackAsync();
+                response.SetError(ex.Message, 500);
+            }
+            return response;
+        }
+
+        private bool IsValidSignature(string payload, string signature)
+        {
+            var secretKey = _configuration["Monnify:SecretKey"];
+            if (string.IsNullOrEmpty(secretKey)) return false;
+
+            using (var hmac = new System.Security.Cryptography.HMACSHA512(System.Text.Encoding.UTF8.GetBytes(secretKey)))
+            {
+                var hash = hmac.ComputeHash(System.Text.Encoding.UTF8.GetBytes(payload));
+                var computed = BitConverter.ToString(hash).Replace("-", "").ToLower();
+                return computed == signature.ToLower();
             }
         }
 

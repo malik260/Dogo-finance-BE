@@ -1,5 +1,6 @@
-﻿using DogoFinance.BusinessLogic.Layer.Response;
+using DogoFinance.BusinessLogic.Layer.Response;
 using DogoFinance.BusinessLogic.Layer.Models.Request;
+using DogoFinance.DataAccess.Layer.DTO;
 using DogoFinance.DataAccess.Layer.Interfaces;
 using DogoFinance.DataAccess.Layer.Models.Entities;
 using DogoFinance.DataAccess.Layer.Repositories.Base;
