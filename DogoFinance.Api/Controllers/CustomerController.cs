@@ -2,10 +2,13 @@ using DogoFinance.CustomerManagement.Interfaces;
 using DogoFinance.BusinessLogic.Layer.Models.Request;
 using DogoFinance.BusinessLogic.Layer.Response;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace DogoFinance.Api.Controllers
 {
     [ApiController]
+    [Authorize]
     [Route("api/[controller]")]
     public class CustomerController : ControllerBase
     {
@@ -18,6 +21,7 @@ namespace DogoFinance.Api.Controllers
             _nokService = nokService;
         }
 
+        [AllowAnonymous]
         [HttpPost("signup")]
         public async Task<ActionResult<ApiResponse>> SignUp([FromBody] SignUpRequest request)
         {
@@ -32,6 +36,7 @@ namespace DogoFinance.Api.Controllers
             return StatusCode(response.Status, response);
         }
 
+        [AllowAnonymous]
         [HttpPost("verify-email")]
         public async Task<ActionResult<ApiResponse>> VerifyEmail([FromBody] VerifyEmailRequest request)
         {
@@ -40,10 +45,11 @@ namespace DogoFinance.Api.Controllers
             return StatusCode(response.Status, response);
         }
 
+        [AllowAnonymous]
         [HttpPost("resend-code")]
-        public async Task<ActionResult<ApiResponse>> ResendCode([FromQuery] string email)
+        public async Task<ActionResult<ApiResponse>> ResendCode([FromBody] ResendCodeRequest request)
         {
-            var response = await _customerService.ResendVerificationCode(email);
+            var response = await _customerService.ResendVerificationCode(request.Email);
             if (response.Boolean) return Ok(response);
             return StatusCode(response.Status, response);
         }
@@ -91,6 +97,34 @@ namespace DogoFinance.Api.Controllers
         public async Task<ActionResult<ApiResponse>> GetRelationshipTypes()
         {
             var response = await _nokService.GetRelationshipTypes();
+            return Ok(response);
+        }
+
+        [AllowAnonymous]
+        [HttpGet("genders")]
+        public async Task<ActionResult<ApiResponse>> GetGenders()
+        {
+            var response = await _customerService.GetGenders();
+            return Ok(response);
+        }
+
+        [HttpGet("profile")]
+        public async Task<ActionResult<ApiResponse>> GetProfile()
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
+
+            var response = await _customerService.GetProfile(long.Parse(userIdStr));
+            return Ok(response);
+        }
+
+        [HttpPost("update-profile")]
+        public async Task<ActionResult<ApiResponse>> UpdateProfile([FromBody] UpdateProfileRequest request)
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
+
+            var response = await _customerService.UpdateProfile(long.Parse(userIdStr), request);
             return Ok(response);
         }
     }

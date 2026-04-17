@@ -44,7 +44,7 @@ namespace DogoFinance.CustomerManagement.Services
         public async Task<ApiResponse> GetNextOfKins(long customerId)
         {
             var noks = await _uow.NextOfKins.GetByCustomerId(customerId);
-            return new ApiResponse { Success = true, Data = noks, Message = "Next of kin list retrieved" };
+            return new ApiResponse { Success = true, Boolean = true, Status = 200, Data = noks, Message = "Next of kin list retrieved" };
         }
 
         public async Task<ApiResponse> GetRelationshipTypes()

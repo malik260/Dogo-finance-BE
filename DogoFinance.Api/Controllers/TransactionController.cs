@@ -5,9 +5,12 @@ using DogoFinance.DataAccess.Layer.DTO;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
+using Microsoft.AspNetCore.Authorization;
+
 namespace DogoFinance.Api.Controllers
 {
     [ApiController]
+    [Authorize]
     [Route("api/[controller]")]
     public class TransactionController : ControllerBase
     {
@@ -106,6 +109,7 @@ namespace DogoFinance.Api.Controllers
             return StatusCode(response.Status, response);
         }
 
+        [AllowAnonymous]
         [HttpPost("webhook/monnify")]
         public async Task<IActionResult> MonnifyWebhook()
         {
@@ -120,6 +124,7 @@ namespace DogoFinance.Api.Controllers
         [HttpGet("deposit/virtual-account")]
         public async Task<IActionResult> GetVirtualAccount()
         {
+            Console.WriteLine("--- GetVirtualAccount Endpoint Hit ---");
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
             

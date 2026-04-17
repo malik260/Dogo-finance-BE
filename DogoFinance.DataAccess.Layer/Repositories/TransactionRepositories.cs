@@ -11,7 +11,16 @@ namespace DogoFinance.DataAccess.Layer.Repositories
 
         public async Task CreateWallet(TblWallet wallet)
         {
-            await BaseRepository().Insert(wallet);
+            try
+            {
+                await BaseRepository().Insert(wallet);
+
+            }
+            catch (Exception ex)
+            {
+
+                throw;
+            }
         }
 
         public async Task UpdateWallet(TblWallet wallet)

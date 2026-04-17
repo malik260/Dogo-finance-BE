@@ -34,6 +34,11 @@ namespace DogoFinance.BusinessLogic.Layer.Models.Request
         [Required]
         public DateTime DateOfBirth { get; set; }
 
+        [Required]
+        public int GenderId { get; set; }
+
+        public bool IsPoliticallyExposed { get; set; }
+
         public string? ReferralCode { get; set; }
     }
 }

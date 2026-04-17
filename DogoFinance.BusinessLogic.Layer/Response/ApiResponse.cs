@@ -28,6 +28,7 @@ namespace DogoFinance.BusinessLogic.Layer.Response
             Message = message;
             Boolean = state;
             Success = state;
+            Status = state ? 200 : 400;
         }
 
         public void SetError(string message, int status)

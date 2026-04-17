@@ -132,12 +132,12 @@ namespace DogoFinance.CustomerManagement.Services
                 };
 
                 await BaseRepository().Insert(customerBank);
-                return new ApiResponse { Success = true, Message = "Bank account added successfully." };
+                return new ApiResponse { Success = true, Boolean = true, Status = 200, Message = "Bank account added successfully." };
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "AddCustomerBank Failed for userId {UserId}", userId);
-                return new ApiResponse { Message = "Internal error adding bank account.", Status = 500 };
+                return new ApiResponse { Success = false, Boolean = false, Message = "Internal error adding bank account.", Status = 500 };
             }
         }
 
@@ -168,12 +168,12 @@ namespace DogoFinance.CustomerManagement.Services
                     }
                 }
 
-                return new ApiResponse { Success = true, Message = "Bank account removed successfully." };
+                return new ApiResponse { Success = true, Boolean = true, Status = 200, Message = "Bank account removed successfully." };
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "DeleteCustomerBank Failed for customerBankId {Id}", customerBankId);
-                return new ApiResponse { Message = "Internal error removing bank account.", Status = 500 };
+                return new ApiResponse { Success = false, Boolean = false, Message = "Internal error removing bank account.", Status = 500 };
             }
         }
 
@@ -200,12 +200,12 @@ namespace DogoFinance.CustomerManagement.Services
                 target.IsDefault = true;
                 await BaseRepository().Update(target);
 
-                return new ApiResponse { Success = true, Message = "Default bank account updated." };
+                return new ApiResponse { Success = true, Boolean = true, Status = 200, Message = "Default bank account updated." };
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "SetDefaultBank Failed for customerBankId {Id}", customerBankId);
-                return new ApiResponse { Message = "Internal error.", Status = 500 };
+                return new ApiResponse { Success = false, Boolean = false, Message = "Internal error.", Status = 500 };
             }
         }
     }

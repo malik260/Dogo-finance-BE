@@ -240,6 +240,12 @@ namespace DogoFinance.DataAccess.Layer.Repositories
 
         public async Task SaveInvestmentTransaction(TblInvestmentTransaction tx)
             => await BaseRepository().Insert(tx);
+            
+        public async Task<IEnumerable<TblInvestmentTransaction>> GetInvestmentTransactionsByCustomer(long customerId)
+            => await BaseRepository().AsQueryable<TblInvestmentTransaction>(x => x.CustomerId == customerId)
+                .Include(x => x.Portfolio)
+                .OrderByDescending(x => x.CreatedAt)
+                .ToListAsync();
 
         public async Task<PortfolioSummaryDto> GetPortfolioSummaryMetrics(long customerId)
         {

@@ -46,7 +46,20 @@ namespace DogoFinance.Authentication.Services
 
                 if (user.IsActive == false)
                 {
+                    // If verification code is still present, email is likely not verified.
+                    if (!string.IsNullOrEmpty(user.VerificationCode))
+                    {
+                        response.SetError("Please verify your email address before logging in. Check your inbox for the verification link.", 403);
+                        return response;
+                    }
+
                     response.SetError("Your account is suspended or blocked. Please contact admin.", 403);
+                    return response;
+                }
+
+                if (user.IsLocked)
+                {
+                    response.SetError("Your account is locked due to multiple failed login attempts. Please reset your password or contact support.", 403);
                     return response;
                 }
 
@@ -314,6 +327,8 @@ namespace DogoFinance.Authentication.Services
             return new ApiResponse
             {
                 Success = true,
+                Boolean = true,
+                Status = 200,
                 Message = "Sessions retrieved",
                 Data = sessions.Select(s => new
                 {
@@ -333,7 +348,7 @@ namespace DogoFinance.Authentication.Services
             if (session == null) return new ApiResponse { Message = "Session not found", Status = 404 };
 
             await BaseRepository().Delete(session);
-            return new ApiResponse { Success = true, Message = "Session revoked successfully" };
+            return new ApiResponse { Success = true, Boolean = true, Status = 200, Message = "Session revoked successfully" };
         }
     }
 }

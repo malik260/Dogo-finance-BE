@@ -191,7 +191,7 @@ namespace DogoFinance.Authentication.Services
                 await _uow.Users.SaveUser(user);
 
                 string msg = status ? "Two-Factor Authentication (2FA) enabled successfully." : "Two-Factor Authentication (2FA) disabled successfully.";
-                return new ApiResponse { Success = true, Message = msg };
+                return new ApiResponse { Success = true, Boolean = true, Status = 200, Message = msg };
             }
             catch (Exception ex)
             {

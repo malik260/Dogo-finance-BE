@@ -11,5 +11,8 @@ namespace DogoFinance.CustomerManagement.Interfaces
         Task<ApiResponse> GetTodoList(long customerId);
         Task<ApiResponse> VerifyBvn(long customerId, BvnVerificationRequest request);
         Task<ApiResponse> VerifyNin(long customerId, NinVerificationRequest request);
+        Task<ApiResponse> GetProfile(long userId);
+        Task<ApiResponse> UpdateProfile(long userId, UpdateProfileRequest request);
+        Task<ApiResponse> GetGenders();
     }
 }

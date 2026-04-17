@@ -69,6 +69,7 @@ namespace DogoFinance.DataAccess.Layer.Interfaces.Repositories
         Task<IEnumerable<TblPortfolioInstrument>> GetInstrumentsDetailed(int portfolioId);
         Task<decimal> GetLatestNAV(int instrumentId);
         Task SaveInvestmentTransaction(TblInvestmentTransaction tx);
+        Task<IEnumerable<TblInvestmentTransaction>> GetInvestmentTransactionsByCustomer(long customerId);
 
         Task<PortfolioSummaryDto> GetPortfolioSummaryMetrics(long customerId);
         Task<TblInstrumentPrice> GetInstrumentPriceInfo(int instrumentId);

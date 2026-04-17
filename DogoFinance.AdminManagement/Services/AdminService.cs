@@ -130,8 +130,7 @@ namespace DogoFinance.AdminManagement.Services
 
             var result = admins.Select(u => new {
                 UserId = u.UserId,
-                FirstName = u.FirstName,
-                LastName = u.LastName,
+                UserName = u.UserName,
                 Email = u.Email,
                 PhoneNumber = u.PhoneNumber,
                 Role = u.TblUserRoles.FirstOrDefault()?.Role?.Name ?? "Admin",
@@ -147,6 +146,7 @@ namespace DogoFinance.AdminManagement.Services
         {
             var customers = await BaseRepository().AsQueryable<TblCustomer>(c => true)
                 .Include(c => c.User)
+                .Include(c => c.TblWallets)
                 .ToListAsync();
             var result = customers.Select(c => new {
                 Id = "C" + c.CustomerId.ToString("D3"),
@@ -154,9 +154,9 @@ namespace DogoFinance.AdminManagement.Services
                 LastName = c.LastName,
                 Email = c.User?.Email ?? "N/A", // This depends on user being loaded
                 Phone = c.PhoneNumber,
-                Status = c.User?.IsActive == false ? "Locked" : (c.Ninverified == true && c.Ninverified == true ? "Active" : "Pending KYC"),
+                Status = c.User?.IsActive == false ? "Pending KYC" : (c.Ninverified == true && c.Ninverified == true ? "Active" : "Pending KYC"),
                 KycLevel = c.Ninverified == true && c.Bvnverified == true ? "Level 3 - Verified" : (c.Bvnverified == true ? "Level 2 - Partial" : "Level 1 - Basic"),
-                AccountBalance = 0, // In real life, calculate from wallet
+                AccountBalance = c.TblWallets.FirstOrDefault()?.Balance ?? 0, // Get balance from TblWallet
                 DateJoined = c.CreatedAt.ToString("MM/dd/yyyy")
             }).ToList();
 

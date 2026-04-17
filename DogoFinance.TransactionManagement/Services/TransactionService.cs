@@ -81,7 +81,11 @@ namespace DogoFinance.TransactionManagement.Services
 
             if (monnifyResult != null && monnifyResult.RequestSuccessful)
             {
-                response.SetMessage("Payment initialized", true, new { monnifyResult.ResponseBody.CheckoutUrl, reference });
+                string transref = monnifyResult.ResponseBody.TransactionReference;
+                response.SetMessage("Payment initialized", true, new { monnifyResult.ResponseBody.CheckoutUrl, reference, transref });
+
+                payment.ProviderReference = transref;
+                await _uow.Payments.SavePayment(payment);
             }
             else
             {
@@ -95,30 +99,39 @@ namespace DogoFinance.TransactionManagement.Services
 
         public async Task<ApiResponse> ChargeCard(MonnifyChargeRequest request)
         {
-            var response = new ApiResponse();
-            var monnifyRequest = new CardChargeRequest
+            try
             {
-                transactionReference = request.Reference,
-                card = new CardDetails
+                var response = new ApiResponse();
+                var monnifyRequest = new CardChargeRequest
                 {
-                    number = request.CardNumber,
-                    expiryMonth = request.ExpiryMonth,
-                    expiryYear = request.ExpiryYear,
-                    cvv = request.CVV,
-                    pin = request.Pin
-                }
-            };
+                    transactionReference = request.Reference,
+                    card = new CardDetails
+                    {
+                        number = request.CardNumber,
+                        expiryMonth = request.ExpiryMonth,
+                        expiryYear = request.ExpiryYear,
+                        cvv = request.CVV,
+                        pin = request.Pin
+                    }
+                };
 
-            var result = await _monnifyService.ChargeCard(monnifyRequest);
-            if (result != null)
-            {
-                response.SetMessage("Charge initiated", true, result);
+                var result = await _monnifyService.ChargeCard(monnifyRequest);
+                if (result != null && result.RequestSuccessful)
+                {
+                    response.SetMessage("Charge initiated", true, result);
+                }
+                else
+                {
+                    response.SetError(result?.ResponseMessage ?? "Failed to initiate card charge", 400);
+                }
+                return response;
+
             }
-            else
+            catch (Exception ex)
             {
-                response.SetError("Failed to initiate card charge", 400);
+
+                throw;
             }
-            return response;
         }
 
         public async Task<ApiResponse> AuthorizeDeposit(MonnifyAuthorizeRequest request)
@@ -126,8 +139,9 @@ namespace DogoFinance.TransactionManagement.Services
             var response = new ApiResponse();
             var authorizeReq = new AuthorizeOtpRequest
             {
-                TransactionReference = request.Reference,
-                TokenId = request.Otp
+                transactionReference = request.Reference,
+                tokenId = request.Id,
+                token = request.Otp
             };
 
             var success = await _monnifyService.AuthorizeOtp(authorizeReq);
@@ -217,13 +231,23 @@ namespace DogoFinance.TransactionManagement.Services
                 var user = await _uow.Users.GetById(userId);
                 if (user == null) { response.SetError("User not found", 404); return response; }
                 var customer = await _uow.Customers.GetByUserId(userId);
+                if (customer == null) { response.SetError("Customer profile not found. Please complete your profile.", 404); return response; }
 
-                var existing = await _uow.ReservedAccounts.GetByUserId(userId);
-                if (existing != null)
+                var existingAccounts = await _uow.ReservedAccounts.GetAccountsByUserId(userId);
+                if (existingAccounts != null && existingAccounts.Any())
                 {
-                    response.SetMessage("Existing account found", 200, existing);
+                    _logger.LogInformation("Existing virtual accounts found for user {UserId}", userId);
+                    var mappedAccounts = existingAccounts.Select(a => new
+                    {
+                        a.BankName,
+                        a.AccountNumber,
+                        a.AccountReference
+                    }).ToList();
+                    response.SetMessage("Existing accounts found", true, mappedAccounts);
                     return response;
                 }
+
+                _logger.LogInformation("No existing accounts. Calling Monnify for user {UserId}", userId);
 
                 var request = new CreateReservedAccountRequest
                 {
@@ -231,8 +255,15 @@ namespace DogoFinance.TransactionManagement.Services
                     accountName = $"{customer.FirstName} {customer.LastName}",
                     customerEmail = user.Email,
                     customerName = $"{customer.FirstName} {customer.LastName}",
-                    getAllAvailableBanks = true
+                    getAllAvailableBanks = true,
+                    customerBvn = customer.Bvn // Monnify now requires this
                 };
+
+                if (string.IsNullOrEmpty(customer.Bvn) || !customer.Bvnverified)
+                {
+                    response.SetError("BVN verification is required to create a virtual account.", 400);
+                    return response;
+                }
 
                 var monnifyResult = await _monnifyService.CreateReservedAccount(request);
                 if (monnifyResult == null || !monnifyResult.requestSuccessful)
@@ -248,22 +279,32 @@ namespace DogoFinance.TransactionManagement.Services
                     return response;
                 }
 
-                // Save first account
-                var mainAcc = body.accounts[0];
-                var accountEntity = new TblReservedAccount
+                var savedAccounts = new List<TblReservedAccount>();
+                foreach (var acc in body.accounts)
                 {
-                    UserId = userId,
-                    AccountReference = body.accountReference,
-                    AccountNumber = mainAcc.accountNumber,
-                    BankName = mainAcc.bankName,
-                    BankCode = mainAcc.bankCode,
-                    CreatedAt = DateTime.UtcNow
-                };
+                    var accountEntity = new TblReservedAccount
+                    {
+                        UserId = userId,
+                        AccountReference = body.accountReference,
+                        AccountNumber = acc.accountNumber,
+                        BankName = acc.bankName,
+                        BankCode = acc.bankCode,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _uow.ReservedAccounts.SaveReservedAccount(accountEntity);
+                    savedAccounts.Add(accountEntity);
+                }
 
-                await _uow.ReservedAccounts.SaveReservedAccount(accountEntity);
                 await _uow.SaveChangesAsync();
 
-                response.SetMessage("Virtual account created successfully", 200, accountEntity);
+                var finalMapped = savedAccounts.Select(a => new
+                {
+                    a.BankName,
+                    a.AccountNumber,
+                    a.AccountReference
+                }).ToList();
+
+                response.SetMessage("Virtual accounts created successfully", true, finalMapped);
             }
             catch (Exception ex)
             {
@@ -476,28 +517,68 @@ namespace DogoFinance.TransactionManagement.Services
 
         public async Task<ApiResponse> GetTransactionHistory(long userId)
         {
-            var history = await _uow.Transactions.GetByUserId(userId);
-            return new ApiResponse { Success = true, Data = history, Message = "History retrieved" };
+            var customer = await _uow.Customers.GetByUserId(userId);
+            var walletHistory = await _uow.Transactions.GetByUserId(userId);
+            
+            var historyList = walletHistory.Select(t => new {
+                Id = t.TransactionId.ToString(),
+                Reference = t.Reference,
+                Type = t.TransactionType == TransactionType.DEPOSIT ? "deposit" : 
+                       (t.TransactionType == TransactionType.WITHDRAWAL ? "withdrawal" : "other"),
+                Amount = t.Amount,
+                Status = t.Status == 1 ? "completed" : (t.Status == 0 ? "pending" : "failed"),
+                Description = t.Narration,
+                Date = t.CreatedAt
+            }).ToList<object>();
+
+            if (customer != null)
+            {
+                var investmentHistory = await _uow.Portfolios.GetInvestmentTransactionsByCustomer(customer.CustomerId);
+                var mappedInvestments = investmentHistory.Select(i => new {
+                    Id = $"INV_{i.Id}",
+                    Reference = $"REF_{i.Id}",
+                    Type = i.TransactionType == "BUY" ? "investment" : "liquidation",
+                    Amount = i.Amount,
+                    Status = "completed",
+                    Description = i.TransactionType == "BUY" ? $"Investment in {i.Portfolio?.Name ?? "Portfolio"}" : $"Liquidation of {i.Portfolio?.Name ?? "Portfolio"}",
+                    Date = i.CreatedAt
+                });
+                historyList.AddRange(mappedInvestments);
+            }
+
+            var sortedHistory = historyList
+                .OrderByDescending(h => (DateTime)((dynamic)h).Date)
+                .ToList();
+
+            var response = new ApiResponse();
+            response.SetMessage("History retrieved", true, sortedHistory);
+            return response;
         }
 
         public async Task<ApiResponse> GetWallet(long customerId)
         {
+            var response = new ApiResponse();
             var wallet = await _uow.Wallets.GetByCustomerId(customerId);
-            if (wallet == null) return new ApiResponse { Message = "Wallet not found", Status = 404 };
-            return new ApiResponse { Success = true, Data = wallet, Message = "Wallet fetched" };
+            if (wallet == null) {
+                response.SetError("Wallet not found", 404);
+                return response;
+            }
+            response.SetMessage("Wallet fetched", true, wallet);
+            return response;
         }
 
         public async Task<ApiResponse> GetFinanceSummary()
         {
             var totalInflows = await _uow.Ledgers.GetTotalInflows();
             var totalOutflows = await _uow.Ledgers.GetTotalOutflows();
-            
-            return new ApiResponse 
-            { 
-                Success = true, 
-                Data = new { TotalInflows = totalInflows, TotalOutflows = totalOutflows, NetLiability = totalInflows - totalOutflows },
-                Message = "Finance summary retrieved" 
-            };
+
+            var response = new ApiResponse();
+            response.SetMessage("Finance summary retrieved", true, new { 
+                TotalInflows = totalInflows, 
+                TotalOutflows = totalOutflows, 
+                NetLiability = totalInflows - totalOutflows 
+            });
+            return response;
         }
     }
 }

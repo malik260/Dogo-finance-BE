@@ -82,11 +82,26 @@ namespace DogoFinance.CustomerManagement.Services
                     FirstName = request.FirstName,
                     LastName = request.LastName,
                     DateOfBirth = request.DateOfBirth,
+                    Gender = request.GenderId,
+                    IsPolitcallyExposed = request.IsPoliticallyExposed,
                     CreatedAt = DateTime.UtcNow,
-                    IsDeleted = false
+                    IsDeleted = false,
+                    PhoneNumber = request.PhoneNumber
                 };
 
                 await _uow.Customers.SaveCustomer(customer);
+                
+                // Create Wallet for Customer
+                var wallet = new TblWallet
+                {
+                    CustomerId = customer.CustomerId,
+                    WalletNumber = new Random().NextInt64(1000000000, 9999999999).ToString(),
+                    Currency = 1, // Assume 1 for NGN
+                    Balance = 0,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _uow.Wallets.CreateWallet(wallet);
 
                 // Assign Role (3 = Customer)
                 var userRole = new TblUserRole
@@ -96,15 +111,6 @@ namespace DogoFinance.CustomerManagement.Services
                 };
                 await BaseRepository().Insert(userRole);
 
-                // Create Virtual Account (Reserved Account)
-                try
-                {
-                    await _transactionService.CreateVirtualAccount(user.UserId);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to create virtual account during signup for {Email}", request.Email);
-                }
 
                 var baseUrl = _configuration["SystemConfig:FrontendBaseUrl"] ?? "http://localhost:4200";
                 var verificationLink = $"{baseUrl}/verify-email?email={Uri.EscapeDataString(user.Email)}&code={verificationCode}";
@@ -140,12 +146,15 @@ namespace DogoFinance.CustomerManagement.Services
 
         public async Task<ApiResponse> VerifyEmail(VerifyEmailRequest request)
         {
-            var user = await _uow.Users.GetByEmail(request.Email);
+            var email = request.Email.Trim();
+            var code = request.Code.Trim();
+
+            var user = await _uow.Users.GetByEmail(email);
             if (user == null) return new ApiResponse { Message = "User not found", Status = 404 };
 
             if (user.IsActive == true) return new ApiResponse { Success = true, Message = "Email already verified", Boolean = true };
 
-            if (user.VerificationCode != request.Code) return new ApiResponse { Message = "Invalid verification code", Status = 400 };
+            if (user.VerificationCode != code) return new ApiResponse { Message = "Invalid verification code", Status = 400 };
 
             if (user.VerificationExpiry < DateTime.UtcNow) return new ApiResponse { Message = "Verification code expired", Status = 400 };
 
@@ -155,13 +164,17 @@ namespace DogoFinance.CustomerManagement.Services
             user.ModifiedAt = DateTime.UtcNow;
 
             await _uow.Users.SaveUser(user);
+            // Explicitly save changes to ensure persistence outside of any implicit transactions
+            await _uow.SaveChangesAsync();
 
             return new ApiResponse { Success = true, Boolean = true, Message = "Email verified successfully" };
         }
 
         public async Task<ApiResponse> ResendVerificationCode(string email)
         {
-            var user = await _uow.Users.GetByEmail(email);
+            if (string.IsNullOrEmpty(email)) return new ApiResponse { Message = "Email is required", Status = 400 };
+            
+            var user = await _uow.Users.GetByEmail(email.Trim());
             if (user == null) return new ApiResponse { Message = "User not found", Status = 404 };
 
             if (user.IsActive == true) return new ApiResponse { Message = "Email already verified", Status = 400 };
@@ -171,12 +184,13 @@ namespace DogoFinance.CustomerManagement.Services
             user.VerificationExpiry = DateTime.UtcNow.AddMinutes(15);
 
             await _uow.Users.SaveUser(user);
+            await _uow.SaveChangesAsync();
 
             var customer = await _uow.Customers.GetByUserId(user.UserId);
             var firstName = customer?.FirstName ?? "there";
 
             var baseUrl = _configuration["SystemConfig:FrontendBaseUrl"] ?? "http://localhost:4200";
-            var verificationLink = $"{baseUrl}/verify-email?email={Uri.EscapeDataString(email)}&code={verificationCode}";
+            var verificationLink = $"{baseUrl}/verify-email?email={Uri.EscapeDataString(user.Email)}&code={verificationCode}";
 
             var emailPlaceholders = new Dictionary<string, string>
             {
@@ -185,7 +199,7 @@ namespace DogoFinance.CustomerManagement.Services
             };
 
             var emailSent = await _emailService.SendTemplateEmail(
-                email, 
+                user.Email, 
                 "Verify Your Account - DogoFinance", 
                 "RegistrationVerification", 
                 emailPlaceholders
@@ -335,6 +349,65 @@ namespace DogoFinance.CustomerManagement.Services
             }
 
             return new ApiResponse { Message = monnifyResponse?.responseMessage ?? "NIN verification failed", Status = 400 };
+        }
+
+        public async Task<ApiResponse> GetProfile(long userId)
+        {
+            var customer = await _uow.Customers.GetByUserId(userId);
+            if (customer == null) return new ApiResponse { Message = "Profile not found", Status = 404 };
+
+            var user = await _uow.Users.GetById(userId);
+            
+            var initials = (customer.FirstName?.Length > 0 ? customer.FirstName[0].ToString() : "") + 
+                           (customer.LastName?.Length > 0 ? customer.LastName[0].ToString() : "");
+
+            var profile = new
+            {
+                customer.FirstName,
+                customer.LastName,
+                Email = user?.Email,
+                Phone = user?.PhoneNumber ?? customer.PhoneNumber,
+                Avatar = initials,
+                Tier = customer.Bvnverified ? "Tier 2 Investor" : "Tier 1 Investor"
+            };
+
+            return new ApiResponse { Success = true, Data = profile, Message = "Profile retrieved", Boolean = true };
+        }
+
+        public async Task<ApiResponse> UpdateProfile(long userId, UpdateProfileRequest request)
+        {
+            var customer = await _uow.Customers.GetByUserId(userId);
+            if (customer == null) return new ApiResponse { Message = "Profile not found", Status = 404 };
+
+            var user = await _uow.Users.GetById(userId);
+            if (user == null) return new ApiResponse { Message = "User not found", Status = 404 };
+
+            if (!string.IsNullOrEmpty(request.FirstName)) customer.FirstName = request.FirstName;
+            if (!string.IsNullOrEmpty(request.LastName)) customer.LastName = request.LastName;
+            
+            if (!string.IsNullOrEmpty(request.Phone) && request.Phone != user.PhoneNumber)
+            {
+                var existingUser = await _uow.Users.GetByPhoneNumber(request.Phone);
+                if (existingUser != null) return new ApiResponse { Message = "Phone number already in use.", Status = 400 };
+
+                user.PhoneNumber = request.Phone;
+                customer.PhoneNumber = request.Phone;
+            }
+
+            customer.ModifiedAt = DateTime.UtcNow;
+            user.ModifiedAt = DateTime.UtcNow;
+
+            await _uow.Customers.SaveCustomer(customer);
+            await _uow.Users.SaveUser(user);
+
+            var response = await GetProfile(userId);
+            response.Message = "Profile updated successfully";
+            return response;
+        }
+        public async Task<ApiResponse> GetGenders()
+        {
+            var genders = await BaseRepository().FindList<TblGender>(g => g.IsActive);
+            return new ApiResponse { Success = true, Data = genders, Message = "Genders retrieved successfully", Boolean = true };
         }
     }
 }

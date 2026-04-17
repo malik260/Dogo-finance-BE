@@ -11,15 +11,23 @@ namespace DogoFinance.DataAccess.Layer.Repositories
 
         public async Task SaveNextOfKin(TblNextOfKin nok)
         {
-            if (nok.Id == 0)
+            try
             {
-                nok.CreatedAt = DateTime.UtcNow;
-                await BaseRepository().Insert(nok);
+                if (nok.Id == 0)
+                {
+                    nok.CreatedAt = DateTime.UtcNow;
+                    await BaseRepository().Insert(nok);
+                }
+                else
+                {
+                    nok.ModifiedAt = DateTime.UtcNow;
+                    await BaseRepository().Update(nok);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                nok.ModifiedAt = DateTime.UtcNow;
-                await BaseRepository().Update(nok);
+
+                throw;
             }
         }
     }

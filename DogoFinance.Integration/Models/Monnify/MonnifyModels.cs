@@ -79,10 +79,36 @@ namespace DogoFinance.Integration.Models.Monnify
         public string? pin { get; set; }
     }
 
+    public class CardChargeResponse
+    {
+        public bool RequestSuccessful { get; set; }
+        public string ResponseMessage { get; set; } = null!;
+        public string ResponseCode { get; set; } = null!;
+        public CardChargeResponseBody ResponseBody { get; set; } = null!;
+    }
+
+    public class CardChargeResponseBody
+    {
+        public string Status { get; set; } = null!;
+        public string Message { get; set; } = null!;
+        public OtpData? OtpData { get; set; }
+        public string TransactionReference { get; set; } = null!;
+        public string PaymentReference { get; set; } = null!;
+        public decimal AuthorizedAmount { get; set; }
+    }
+
+    public class OtpData
+    {
+        public string? Id { get; set; }
+        public string? Message { get; set; }
+        public string? AuthData { get; set; }
+    }
+
     public class AuthorizeOtpRequest
     {
-        public string TransactionReference { get; set; } = null!;
-        public string TokenId { get; set; } = null!;
+        public string transactionReference { get; set; } = null!;
+        public string tokenId { get; set; } = null!;
+        public string token { get; set; } = null!;
     }
 
     public class TransactionStatusResponse
@@ -109,6 +135,7 @@ namespace DogoFinance.Integration.Models.Monnify
         public string customerEmail { get; set; } = null!;
         public string customerName { get; set; } = null!;
         public bool getAllAvailableBanks { get; set; } = true;
+        public string? customerBvn { get; set; }
     }
 
     public class ReservedAccountResponse

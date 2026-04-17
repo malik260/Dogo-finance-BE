@@ -38,6 +38,7 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public virtual DbSet<TblAccessRight> TblAccessRights { get; set; } = null!;
         public virtual DbSet<TblRoleAccessRight> TblRoleAccessRights { get; set; } = null!;
         public virtual DbSet<TblSystemSetting> TblSystemSettings { get; set; } = null!;
+        public virtual DbSet<TblGender> TblGenders { get; set; } = null!;
 
         // Portfolio Management
         public virtual DbSet<TblAssetClass> TblAssetClasses { get; set; } = null!;
@@ -278,6 +279,12 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
             {
                 entity.ToTable("TBL_SYSTEM_SETTING");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            });
+
+            modelBuilder.Entity<TblGender>(entity =>
+            {
+                entity.ToTable("TBL_GENDER");
+                entity.Property(e => e.IsActive).HasDefaultValueSql("((1))");
             });
 
             // Portfolio Management Configs

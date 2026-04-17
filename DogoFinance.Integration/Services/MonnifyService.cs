@@ -93,21 +93,25 @@ namespace DogoFinance.Integration.Services
             return null;
         }
 
-        public async Task<dynamic?> ChargeCard(CardChargeRequest request)
+        public async Task<CardChargeResponse?> ChargeCard(CardChargeRequest request)
         {
             await Authenticate();
             if (string.IsNullOrEmpty(_accessToken)) return null;
 
             var baseUrl = _configuration["Monnify:BaseUrl"];
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
-            
+
             var json = JsonSerializer.Serialize(request);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var response = await _httpClient.PostAsync($"{baseUrl}/api/v1/merchant/cards/charge", content);
             var responseContent = await response.Content.ReadAsStringAsync();
 
-            return JsonSerializer.Deserialize<dynamic>(responseContent);
+            if (response.IsSuccessStatusCode)
+                return JsonSerializer.Deserialize<CardChargeResponse>(responseContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            _logger.LogError("Monnify Card Charge Failed: {Content}", responseContent);
+            return null;
         }
 
         public async Task<bool> AuthorizeOtp(AuthorizeOtpRequest request)
@@ -122,6 +126,7 @@ namespace DogoFinance.Integration.Services
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var response = await _httpClient.PostAsync($"{baseUrl}/api/v1/merchant/cards/otp/authorize", content);
+            var responsecontent = await response.Content.ReadAsStringAsync();
             return response.IsSuccessStatusCode;
         }
 
@@ -145,19 +150,34 @@ namespace DogoFinance.Integration.Services
 
         public async Task<TransactionStatusResponse?> VerifyTransaction(string reference)
         {
-            await Authenticate();
-            if (string.IsNullOrEmpty(_accessToken)) return null;
+            try
+            {
+                await Authenticate();
+                if (string.IsNullOrEmpty(_accessToken)) return null;
 
-            var baseUrl = _configuration["Monnify:BaseUrl"];
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+                var baseUrl = _configuration["Monnify:BaseUrl"];
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
 
-            var response = await _httpClient.GetAsync($"{baseUrl}/api/v2/transactions/{reference}");
-            var responseContent = await response.Content.ReadAsStringAsync();
+                var response = await _httpClient.GetAsync($"{baseUrl}/api/v2/transactions/{reference}");
+                var responseContent = await response.Content.ReadAsStringAsync();
 
-            if (response.IsSuccessStatusCode)
-                return JsonSerializer.Deserialize<TransactionStatusResponse>(responseContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (response.IsSuccessStatusCode)
+                {
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString
+                    };
+                    return JsonSerializer.Deserialize<TransactionStatusResponse>(responseContent, options);
+                }
 
-            return null;
+                return null;
+            }
+            catch (Exception ex)
+            {
+
+                throw;
+            }
         }
 
         public async Task<BvnMatchResponse?> VerifyBvnMatch(BvnMatchRequest request)

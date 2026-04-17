@@ -13,6 +13,7 @@ namespace DogoFinance.BusinessLogic.Layer.Models.Request
     public class MonnifyAuthorizeRequest
     {
         public string Reference { get; set; } = null!;
+        public string Id { get; set; } = null!;
         public string Otp { get; set; } = null!;
     }
 }

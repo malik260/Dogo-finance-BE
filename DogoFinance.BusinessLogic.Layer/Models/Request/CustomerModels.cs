@@ -36,4 +36,11 @@ namespace DogoFinance.BusinessLogic.Layer.Models.Request
         [StringLength(11)]
         public string Nin { get; set; } = null!;
     }
+
+    public class UpdateProfileRequest
+    {
+        public string? FirstName { get; set; }
+        public string? LastName { get; set; }
+        public string? Phone { get; set; }
+    }
 }

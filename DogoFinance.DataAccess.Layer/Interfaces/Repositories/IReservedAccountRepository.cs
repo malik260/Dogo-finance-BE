@@ -6,6 +6,7 @@ namespace DogoFinance.DataAccess.Layer.Interfaces.Repositories
     {
         Task<TblReservedAccount?> GetByAccountReference(string reference);
         Task<TblReservedAccount?> GetByUserId(long userId);
+        Task<IEnumerable<TblReservedAccount>> GetAccountsByUserId(long userId);
         Task SaveReservedAccount(TblReservedAccount account);
     }
 }

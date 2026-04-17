@@ -6,7 +6,7 @@ namespace DogoFinance.Integration.Interfaces
     {
         Task<InitializeTransactionResponse?> InitializeTransaction(InitializeTransactionRequest request);
         Task<SingleTransferResponse?> SingleTransfer(SingleTransferRequest request);
-        Task<dynamic?> ChargeCard(CardChargeRequest request);
+        Task<CardChargeResponse?> ChargeCard(CardChargeRequest request);
         Task<bool> AuthorizeOtp(AuthorizeOtpRequest request);
         Task<ReservedAccountResponse?> CreateReservedAccount(CreateReservedAccountRequest request);
         Task<TransactionStatusResponse?> VerifyTransaction(string reference);

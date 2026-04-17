@@ -17,6 +17,11 @@ namespace DogoFinance.DataAccess.Layer.Repositories
             return await BaseRepository().FindEntity<TblReservedAccount>(x => x.UserId == userId);
         }
 
+        public async Task<IEnumerable<TblReservedAccount>> GetAccountsByUserId(long userId)
+        {
+            return await BaseRepository().FindList<TblReservedAccount>(x => x.UserId == userId);
+        }
+
         public async Task SaveReservedAccount(TblReservedAccount account)
         {
             if (account.Id == 0)

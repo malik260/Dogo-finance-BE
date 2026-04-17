@@ -61,6 +61,7 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public long? ModifiedBy { get; set; }
         public string? PhoneNumber { get; set; }
         public bool IsDeleted { get; set; }
+        public bool? IsPolitcallyExposed { get; set; }
         [Timestamp]
         public byte[] RowVersion { get; set; } = null!;
 

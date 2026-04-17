@@ -10,5 +10,8 @@ namespace DogoFinance.DataAccess.Layer.Models.Constants
     {
         public const int DEPOSIT = 1;
         public const int WITHDRAWAL = 2;
+        public const int PROFIT = 3;
+        public const int INVESTMENT = 4;
+        public const int LIQUIDATION = 5;
     }
 }
