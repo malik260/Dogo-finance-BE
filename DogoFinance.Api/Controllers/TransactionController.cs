@@ -140,6 +140,18 @@ namespace DogoFinance.Api.Controllers
             return StatusCode(response.Status, response);
         }
 
+        [HttpPost("send-withdrawal-otp")]
+        public async Task<ActionResult<ApiResponse>> SendWithdrawalOtp([FromBody] InitiateWithdrawalOtpRequest request)
+        {
+            return Ok(await _transactionService.SendWithdrawalOtp(request.CustomerId, request.Amount));
+        }
+
+        public class InitiateWithdrawalOtpRequest
+        {
+            public long CustomerId { get; set; }
+            public decimal Amount { get; set; }
+        }
+
         [HttpGet("history")]
         public async Task<ActionResult<ApiResponse>> GetHistory()
         {

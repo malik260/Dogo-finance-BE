@@ -128,7 +128,8 @@ namespace DogoFinance.Authentication.Services
                     UserId = user.UserId,
                     CustomerId = customer?.CustomerId ?? 0,
                     SessionId = session.SessionId,
-                    user.IsPinSet
+                    user.IsPinSet,
+                    Is2faEnabled = user.Is2faEnabled ?? false
                 });
                 return response;
 

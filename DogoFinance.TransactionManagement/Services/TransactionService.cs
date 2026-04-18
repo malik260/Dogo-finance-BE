@@ -18,13 +18,15 @@ namespace DogoFinance.TransactionManagement.Services
     {
         private readonly IUnitOfWork _uow;
         private readonly IMonnifyService _monnifyService;
+        private readonly IEmailService _emailService;
         private readonly ILogger<TransactionService> _logger;
         private readonly IConfiguration _configuration;
 
-        public TransactionService(IUnitOfWork uow, IMonnifyService monnifyService, ILogger<TransactionService> logger, IConfiguration configuration)
+        public TransactionService(IUnitOfWork uow, IMonnifyService monnifyService, IEmailService emailService, ILogger<TransactionService> logger, IConfiguration configuration)
         {
             _uow = uow;
             _monnifyService = monnifyService;
+            _emailService = emailService;
             _logger = logger;
             _configuration = configuration;
         }
@@ -443,6 +445,25 @@ namespace DogoFinance.TransactionManagement.Services
                     return new ApiResponse { Message = "Incorrect transaction PIN.", Status = 401 };
                 }
 
+                // 2FA Verification
+                if (user.Is2faEnabled == true)
+                {
+                    if (string.IsNullOrEmpty(request.Otp))
+                    {
+                        return new ApiResponse { Message = "2FA is enabled. Please provide the OTP sent to your email.", Boolean = false, Status = 403 };
+                    }
+
+                    if (user.VerificationCode != request.Otp || user.VerificationExpiry < DateTime.UtcNow)
+                    {
+                        return new ApiResponse { Message = "Invalid or expired OTP code.", Boolean = false, Status = 403 };
+                    }
+                    
+                    // Clear OTP after successful use
+                    user.VerificationCode = null;
+                    user.VerificationExpiry = null;
+                    await BaseRepository().Update(user);
+                }
+
                 var wallet = await _uow.Wallets.GetByCustomerId(request.CustomerId);
                 if (wallet == null || wallet.Balance < request.Amount)
                 {
@@ -513,6 +534,39 @@ namespace DogoFinance.TransactionManagement.Services
                 response.SetError(ex.Message, 500);
                 return response;
             }
+        }
+
+        public async Task<ApiResponse> SendWithdrawalOtp(long customerId, decimal amount)
+        {
+            var response = new ApiResponse();
+            var customer = await BaseRepository().FindEntity<TblCustomer>(customerId);
+            if (customer == null) return new ApiResponse { Message = "Customer not found", Status = 404 };
+
+            var user = await BaseRepository().FindEntity<TblUser>(customer.UserId);
+            if (user == null) return new ApiResponse { Message = "User not found", Status = 404 };
+
+            if (user.Is2faEnabled != true)
+            {
+                return new ApiResponse { Message = "2FA is not enabled for this user", Status = 400 };
+            }
+
+            var otp = new Random().Next(100000, 999999).ToString();
+            user.VerificationCode = otp;
+            user.VerificationExpiry = DateTime.UtcNow.AddMinutes(10);
+            await BaseRepository().Update(user);
+
+            var placeholders = new Dictionary<string, string>
+            {
+                { "FirstName", customer.FirstName ?? "Dogo User" },
+                { "Amount", amount.ToString("N2") },
+                { "Code", otp },
+                { "Expiry", "10 minutes" }
+            };
+
+            await _emailService.SendTemplateEmail(user.Email, "Authorize Withdrawal - DogoFinance", "WithdrawalOtp", placeholders);
+
+            response.SetMessage("OTP sent successfully to your email.", true);
+            return response;
         }
 
         public async Task<ApiResponse> GetTransactionHistory(long userId)

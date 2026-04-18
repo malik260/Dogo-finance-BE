@@ -12,6 +12,7 @@ namespace DogoFinance.TransactionManagement.Interfaces
         Task<ApiResponse> CreateVirtualAccount(long userId);
         Task<ApiResponse> HandleMonnifyWebhook(string payload, string signature);
         Task<ApiResponse> InitiateWithdrawal(WithdrawalRequest request);
+        Task<ApiResponse> SendWithdrawalOtp(long customerId, decimal amount);
         Task<ApiResponse> GetTransactionHistory(long userId);
         Task<ApiResponse> GetWallet(long customerId);
         Task<ApiResponse> GetFinanceSummary();

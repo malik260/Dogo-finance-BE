@@ -65,6 +65,7 @@ namespace DogoFinance.CustomerManagement.Services
                         BankLogo = bank?.LogoUrl,
                         cb.AccountNumber,
                         cb.AccountName,
+                        BankCode = bank?.BankCode,
                         cb.IsDefault
                     };
                 });

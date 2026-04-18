@@ -22,5 +22,6 @@ namespace DogoFinance.BusinessLogic.Layer.Models.Request
         public string Pin { get; set; } = null!;
 
         public string? Narration { get; set; }
+        public string? Otp { get; set; }
     }
 }
