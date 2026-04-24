@@ -39,6 +39,11 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public virtual DbSet<TblRoleAccessRight> TblRoleAccessRights { get; set; } = null!;
         public virtual DbSet<TblSystemSetting> TblSystemSettings { get; set; } = null!;
         public virtual DbSet<TblGender> TblGenders { get; set; } = null!;
+        public virtual DbSet<TblAddressDocType> TblAddressDocTypes { get; set; } = null!;
+        public virtual DbSet<TblCustomerAddressVerification> TblCustomerAddressVerifications { get; set; } = null!;
+        public virtual DbSet<TblWithdrawalRequest> TblWithdrawalRequests { get; set; } = null!;
+        public virtual DbSet<TblLiquidationRequest> TblLiquidationRequests { get; set; } = null!;
+
 
         // Portfolio Management
         public virtual DbSet<TblAssetClass> TblAssetClasses { get; set; } = null!;
@@ -52,6 +57,12 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public virtual DbSet<TblCustomerHolding> TblCustomerHoldings { get; set; } = null!;
         public virtual DbSet<TblInvestmentTransaction> TblInvestmentTransactions { get; set; } = null!;
         public virtual DbSet<TblReservedAccount> TblReservedAccounts { get; set; } = null!;
+        public virtual DbSet<TblPortfolioPrice> TblPortfolioPrices { get; set; } = null!;
+
+        // Accounting & Bookkeeping
+        public virtual DbSet<TblChartOfAccount> TblChartOfAccounts { get; set; } = null!;
+        public virtual DbSet<TblJournalEntry> TblJournalEntries { get; set; } = null!;
+        public virtual DbSet<TblJournalLine> TblJournalLines { get; set; } = null!;
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -320,6 +331,47 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
             });
 
             modelBuilder.Entity<TblInvestmentTransaction>(entity => {
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            });
+
+            modelBuilder.Entity<TblLiquidationRequest>(entity => {
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+                entity.Property(e => e.Status).HasDefaultValueSql("((1))"); // PENDING_APPROVAL
+            });
+
+
+            modelBuilder.Entity<TblAddressDocType>(entity => {
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+                entity.Property(e => e.IsActive).HasDefaultValueSql("((1))");
+            });
+
+            modelBuilder.Entity<TblCustomerAddressVerification>(entity => {
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+                entity.Property(e => e.Status).HasDefaultValueSql("('Pending')");
+
+                entity.HasOne(d => d.Customer)
+                    .WithMany(p => p.TblCustomerAddressVerifications)
+                    .HasForeignKey(d => d.CustomerId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_ADDR_VERIF_CUSTOMER");
+
+                entity.HasOne(d => d.DocType)
+                    .WithMany(p => p.TblCustomerAddressVerifications)
+                    .HasForeignKey(d => d.DocTypeId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_ADDR_VERIF_DOCTYPE");
+            });
+
+            modelBuilder.Entity<TblChartOfAccount>(entity => {
+                entity.HasIndex(e => e.AccountCode).IsUnique();
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            });
+
+            modelBuilder.Entity<TblJournalEntry>(entity => {
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            });
+
+            modelBuilder.Entity<TblJournalLine>(entity => {
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
             });
 

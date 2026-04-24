@@ -47,7 +47,16 @@ namespace DogoFinance.DataAccess.Layer.Repositories
     {
         public async Task CreateTransaction(TblTransaction transaction)
         {
-            await BaseRepository().Insert(transaction);
+            try
+            {
+                await BaseRepository().Insert(transaction);
+
+            }
+            catch (Exception ex)
+            {
+
+                throw;
+            }
         }
 
         public async Task<IEnumerable<TblTransaction>> GetByUserId(long userId)

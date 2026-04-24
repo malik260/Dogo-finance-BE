@@ -22,8 +22,10 @@ namespace DogoFinance.CustomerManagement.Services
         private readonly IConfiguration _configuration;
         private readonly ITransactionService _transactionService;
         private readonly IMonnifyService _monnifyService;
+        private readonly ICloudinaryService _cloudinaryService;
+        private readonly IDocumentProcessingService _docProcessor;
 
-        public CustomerService(IUnitOfWork uow, IEmailService emailService, ILogger<CustomerService> logger, IConfiguration configuration, ITransactionService transactionService, IMonnifyService monnifyService)
+        public CustomerService(IUnitOfWork uow, IEmailService emailService, ILogger<CustomerService> logger, IConfiguration configuration, ITransactionService transactionService, IMonnifyService monnifyService, ICloudinaryService cloudinaryService, IDocumentProcessingService docProcessor)
         {
             _uow = uow;
             _emailService = emailService;
@@ -31,6 +33,8 @@ namespace DogoFinance.CustomerManagement.Services
             _configuration = configuration;
             _transactionService = transactionService;
             _monnifyService = monnifyService;
+            _cloudinaryService = cloudinaryService;
+            _docProcessor = docProcessor;
         }
 
         public async Task<ApiResponse> SignUp(SignUpRequest request)
@@ -269,6 +273,24 @@ namespace DogoFinance.CustomerManagement.Services
                 });
             }
 
+            // 5. Address Verification
+            var addrVerif = await BaseRepository().FindEntity<TblCustomerAddressVerification>(v => v.CustomerId == customerId);
+            if (addrVerif == null || (addrVerif.Status != "Approved" && addrVerif.Status != "Approved"))
+            {
+                // Only show if not already approved or at least not verified yet
+                if (string.IsNullOrEmpty(customer.Address))
+                {
+                    todoList.Add(new TodoItem
+                    {
+                        Title = "Address Verification",
+                        Subtitle = "Confirm your residential address with a utility bill",
+                        ActionText = "VERIFY NOW",
+                        ActionType = "ADDR_VERIFY",
+                        Icon = "map"
+                    });
+                }
+            }
+
             return new ApiResponse
             {
                 Success = true,
@@ -408,6 +430,116 @@ namespace DogoFinance.CustomerManagement.Services
         {
             var genders = await BaseRepository().FindList<TblGender>(g => g.IsActive);
             return new ApiResponse { Success = true, Data = genders, Message = "Genders retrieved successfully", Boolean = true };
+        }
+
+        public async Task<ApiResponse> GetAddressDocTypes()
+        {
+            var types = await BaseRepository().FindList<TblAddressDocType>(t => t.IsActive);
+            return new ApiResponse { Success = true, Data = types, Message = "Document types retrieved", Boolean = true };
+        }
+
+        public async Task<ApiResponse> InitiateAddressVerification(long customerId, AddressVerificationRequest request)
+        {
+            var response = new ApiResponse();
+            
+            try 
+            {
+                var customer = await _uow.Customers.GetByUserId(customerId);
+                if (customer == null) return new ApiResponse { Message = "Customer not found", Status = 404 };
+
+                // 1. Upload to Cloudinary
+                var (url, publicId) = await _cloudinaryService.UploadImageAsync(request.File, "address_verifications");
+                
+                if (string.IsNullOrEmpty(url)) 
+                {
+                    return new ApiResponse { Message = "File upload failed", Status = 500 };
+                }
+
+                // 2. Extract contents using AI
+                var extraction = await _docProcessor.ExtractAddressAsync(url);
+
+                // 3. Save verification request
+                var verification = new TblCustomerAddressVerification
+                {
+                    CustomerId = customer.CustomerId,
+                    DocTypeId = request.DocTypeId,
+                    DocumentUrl = url,
+                    CloudinaryPublicId = publicId,
+                    ExtractedAddress = extraction.Address,
+                    ExtractedCity = extraction.City,
+                    ExtractedState = extraction.State,
+                    ExtractedFullText = extraction.FullText,
+                    ConfidenceScore = extraction.ConfidenceScore,
+                    Status = "Review", // System has extracted, now pending review
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await BaseRepository().Insert(verification);
+                await _uow.SaveChangesAsync();
+
+                // 4. Log the action
+                var log = new TblKycLog
+                {
+                    CustomerId = customer.CustomerId,
+                    Type = "ADDR_VERIF",
+                    Status = "Initiated",
+                    Response = $"Extracted: {extraction.Address}, {extraction.City}",
+                    CreatedAt = DateTime.UtcNow
+                };
+                await BaseRepository().Insert(log);
+                await _uow.SaveChangesAsync();
+
+                response.SetMessage("Document uploaded successfully. Extraction complete and pending review.", true);
+                response.Data = new 
+                {
+                    verification.Id,
+                    verification.DocumentUrl,
+                    ExtractedAddress = extraction.Address,
+                    ExtractedCity = extraction.City,
+                    ExtractedState = extraction.State
+                };
+                
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Address verification initiation failed for customer {CustomerId}", customerId);
+                return new ApiResponse { Message = "An error occurred during verification", Status = 500 };
+            }
+        }
+
+        public async Task<ApiResponse> GetVerificationStatuses(long customerId)
+        {
+            try
+            {
+                var customer = await _uow.Customers.GetByUserId(customerId);
+                if (customer == null) return new ApiResponse { Message = "Customer not found", Status = 404 };
+
+                var addrVerif = await BaseRepository().FindEntity<TblCustomerAddressVerification>(v => v.CustomerId == customer.CustomerId);
+                
+                var statuses = new List<object>
+                {
+                    new { type = "BVN", label = "BVN Verification", status = customer.Bvnverified ? "verified" : (string.IsNullOrEmpty(customer.Bvn) ? "not_started" : "pending"), icon = "ri-bank-card-line" },
+                    new { type = "NIN", label = "NIN Verification", status = customer.Ninverified ? "verified" : (string.IsNullOrEmpty(customer.Nin) ? "not_started" : "pending"), icon = "ri-shield-user-line" },
+                    new { type = "Address", label = "Address Verification", status = MapAddressStatus(addrVerif?.Status), icon = "ri-map-pin-user-line", reason = addrVerif?.AdminNotes }
+                };
+
+                return new ApiResponse { Success = true, Data = statuses, Message = "Verification statuses retrieved", Boolean = true };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving verification statuses for customer {CustomerId}", customerId);
+                return new ApiResponse { Message = "Error retrieving verification statuses", Status = 500 };
+            }
+        }
+
+        private string MapAddressStatus(string? status)
+        {
+            if (string.IsNullOrEmpty(status)) return "not_started";
+            status = status.ToLower();
+            if (status == "review") return "pending";
+            if (status == "approved") return "verified";
+            return status;
         }
     }
 }

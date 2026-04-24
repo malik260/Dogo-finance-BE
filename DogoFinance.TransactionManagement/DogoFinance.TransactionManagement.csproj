@@ -15,6 +15,7 @@
     <ProjectReference Include="..\DogoFinance.BusinessLogic.Layer\DogoFinance.BusinessLogic.Layer.csproj" />
     <ProjectReference Include="..\DogoFinance.DataAccess.Layer\DogoFinance.DataAccess.Layer.csproj" />
     <ProjectReference Include="..\DogoFinance.Integration\DogoFinance.Integration.csproj" />
+    <ProjectReference Include="..\DogoFinance.AccountingManagement\DogoFinance.AccountingManagement.csproj" />
   </ItemGroup>
 
 </Project>

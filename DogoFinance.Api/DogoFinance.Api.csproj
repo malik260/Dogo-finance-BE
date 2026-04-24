@@ -21,6 +21,13 @@
     <ProjectReference Include="..\DogoFinance.AdminManagement\DogoFinance.AdminManagement.csproj" />
     <ProjectReference Include="..\DogoFinance.DataAccess.Layer\DogoFinance.DataAccess.Layer.csproj" />
     <ProjectReference Include="..\DogoFinance.ProductManagement\DogoFinance.ProductManagement.csproj" />
+    <ProjectReference Include="..\DogoFinance.AccountingManagement\DogoFinance.AccountingManagement.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="tessdata\eng.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

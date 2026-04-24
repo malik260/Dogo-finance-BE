@@ -10,6 +10,8 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         [Key]
         public int Id { get; set; }
         public int SessionTimeoutInMinutes { get; set; }
+        [Column(TypeName = "decimal(18, 2)")]
+        public decimal WithdrawalAutoThreshold { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
     }

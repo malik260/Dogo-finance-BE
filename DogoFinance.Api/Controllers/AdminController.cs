@@ -4,6 +4,7 @@ using DogoFinance.BusinessLogic.Layer.Response;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using DogoFinance.DataAccess.Layer.Models.Entities;
+using System.Security.Claims;
 
 namespace DogoFinance.Api.Controllers
 {
@@ -84,6 +85,82 @@ namespace DogoFinance.Api.Controllers
         public async Task<ActionResult<ApiResponse>> UpdateAccessRights(int roleId, [FromBody] List<int> accessRightIds)
         {
             var response = await _adminService.UpdateRoleAccessRights(roleId, accessRightIds);
+            return Ok(response);
+        }
+
+        // --- ADDRESS VERIFICATIONS ---
+        [HttpGet("address-verifications")]
+        public async Task<ActionResult<ApiResponse>> ListAddressVerifications([FromQuery] string? status)
+        {
+            var response = await _adminService.ListAddressVerifications(status);
+            return Ok(response);
+        }
+
+        [HttpPost("address-verifications/review")]
+        public async Task<ActionResult<ApiResponse>> ReviewAddressVerification([FromBody] AdminAddressReviewRequest request)
+        {
+            var userIdStr = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
+
+            var response = await _adminService.ReviewAddressVerification(request, long.Parse(userIdStr));
+            return Ok(response);
+        }
+
+        [HttpGet("portfolios/active")]
+        public async Task<ActionResult<ApiResponse>> ListActivePortfolios()
+        {
+            var response = await _adminService.GetActivePortfolios();
+            return Ok(response);
+        }
+
+        // --- SYSTEM SETTINGS ---
+        [HttpGet("settings")]
+        public async Task<ActionResult<ApiResponse>> GetSettings()
+        {
+            var response = await _adminService.GetSystemSettings();
+            return Ok(response);
+        }
+
+        [HttpPut("settings")]
+        public async Task<ActionResult<ApiResponse>> UpdateSettings([FromBody] TblSystemSetting settings)
+        {
+            var response = await _adminService.UpdateSystemSettings(settings);
+            return Ok(response);
+        }
+
+        // --- WITHDRAWAL MANAGEMENT ---
+        [HttpGet("withdrawals")]
+        public async Task<ActionResult<ApiResponse>> ListWithdrawals([FromQuery] string? status)
+        {
+            var response = await _adminService.ListWithdrawalRequests(status);
+            return Ok(response);
+        }
+
+        [HttpPost("withdrawals/review")]
+        public async Task<ActionResult<ApiResponse>> ReviewWithdrawal([FromBody] AdminWithdrawalReviewRequest request)
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
+
+            var response = await _adminService.ReviewWithdrawalRequest(request, long.Parse(userIdStr));
+            return Ok(response);
+        }
+
+        // --- LIQUIDATION MANAGEMENT ---
+        [HttpGet("liquidations")]
+        public async Task<ActionResult<ApiResponse>> ListLiquidations([FromQuery] int? status)
+        {
+            var response = await _adminService.ListLiquidationRequests(status);
+            return Ok(response);
+        }
+
+        [HttpPost("liquidations/review")]
+        public async Task<ActionResult<ApiResponse>> ReviewLiquidation([FromBody] AdminLiquidationReviewRequest request)
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
+
+            var response = await _adminService.ReviewLiquidationRequest(request, long.Parse(userIdStr));
             return Ok(response);
         }
     }

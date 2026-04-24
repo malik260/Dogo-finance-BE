@@ -30,8 +30,16 @@ namespace DogoFinance.DataAccess.Layer.DTO
         public string? Description { get; set; }
         public decimal? ExpectedAnnualReturn { get; set; }
         public bool IsActive { get; set; }
+        
+        public int LockInPeriodDays { get; set; }
+        public int MinHoldingPeriodDays { get; set; }
+        public decimal ExitFeePercentage { get; set; }
+        public int NoticePeriodDays { get; set; }
+        public decimal ApprovalThresholdAmount { get; set; }
+
         public List<PortfolioAllocationRuleDto>? Allocations { get; set; }
     }
+
 
     public class InstrumentDto
     {
@@ -66,5 +74,11 @@ namespace DogoFinance.DataAccess.Layer.DTO
         public int InstrumentId { get; set; }
         public string? InstrumentName { get; set; }
         public decimal Percentage { get; set; }
+    }
+
+    public class SimulateNavRequest
+    {
+        public int PortfolioId { get; set; }
+        public int Days { get; set; }
     }
 }

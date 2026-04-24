@@ -14,5 +14,8 @@ namespace DogoFinance.CustomerManagement.Interfaces
         Task<ApiResponse> GetProfile(long userId);
         Task<ApiResponse> UpdateProfile(long userId, UpdateProfileRequest request);
         Task<ApiResponse> GetGenders();
+        Task<ApiResponse> GetAddressDocTypes();
+        Task<ApiResponse> InitiateAddressVerification(long customerId, AddressVerificationRequest request);
+        Task<ApiResponse> GetVerificationStatuses(long customerId);
     }
 }

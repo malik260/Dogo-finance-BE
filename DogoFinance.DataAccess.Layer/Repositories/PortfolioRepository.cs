@@ -249,34 +249,64 @@ namespace DogoFinance.DataAccess.Layer.Repositories
 
         public async Task<PortfolioSummaryDto> GetPortfolioSummaryMetrics(long customerId)
         {
-            // 1. Total invested
-            var totalInvested = await BaseRepository().AsQueryable<TblCustomerPortfolio>(x => x.CustomerId == customerId)
-                .SumAsync(x => x.TotalInvested);
+            // --- OLD SYSTEM: Instrument-based Holdings ---
+            var totalInvestedLegacy = await BaseRepository().AsQueryable<TblCustomerPortfolio>(x => x.CustomerId == customerId)
+                .SumAsync(x => x.TotalInvested - x.InvestedAmount); // Subtracting new system principal if stored here
 
-            // 2. Get holdings + latest NAV
-            // Since we use the BaseRepository which is a wrapper, we'll use the context directly via the shared repo if possible,
-            // or just use AsQueryable to join.
-            
-            var query = from h in BaseRepository().AsQueryable<TblCustomerHolding>(h => h.CustomerId == customerId)
+            var queryLegacy = from h in BaseRepository().AsQueryable<TblCustomerHolding>(h => h.CustomerId == customerId)
                         join p in BaseRepository().AsQueryable<TblInstrumentPrice>(p => true)
                             on h.InstrumentId equals p.InstrumentId
                         select new { h, p };
 
-            var details = await query.ToListAsync();
+            var detailsLegacy = await queryLegacy.ToListAsync();
+            var groupedLegacy = detailsLegacy.GroupBy(x => x.h.InstrumentId);
             
-            var grouped = details.GroupBy(x => x.h.InstrumentId);
-            
-            decimal totalValue = 0;
-            
-            foreach (var group in grouped)
+            decimal totalValueLegacy = 0;
+            foreach (var group in groupedLegacy)
             {
                 var latestPrice = group.OrderByDescending(x => x.p.PriceDate).FirstOrDefault();
                 if (latestPrice != null)
                 {
-                    totalValue += latestPrice.h.Units * latestPrice.p.NAV;
+                    totalValueLegacy += latestPrice.h.Units * latestPrice.p.NAV;
                 }
             }
 
+            // --- NEW SYSTEM: Portfolio-level Units (NAV Model) ---
+            var userPortfolios = await BaseRepository().AsQueryable<TblCustomerPortfolio>(x => x.CustomerId == customerId && x.Units > 0)
+                .ToListAsync();
+
+            decimal totalInvestedNew = userPortfolios.Sum(x => x.InvestedAmount);
+            decimal totalValueNew = 0;
+
+            foreach (var up in userPortfolios)
+            {
+                var portfolio = await BaseRepository().FindEntity<TblPortfolio>(up.PortfolioId);
+                if (portfolio == null) continue;
+
+                // Get latest price or default to 1.0
+                var latestPrice = await BaseRepository().AsQueryable<TblPortfolioPrice>(p => p.PortfolioId == up.PortfolioId)
+                    .OrderByDescending(p => p.PriceDate)
+                    .FirstOrDefaultAsync();
+                
+                decimal currentNav = latestPrice?.NAV ?? 1.0m;
+
+                // Project growth if expected return exists
+                if (portfolio.ExpectedAnnualReturn.HasValue && latestPrice != null)
+                {
+                    var days = (DateTime.UtcNow.Date - latestPrice.PriceDate.Date).Days;
+                    if (days > 0)
+                    {
+                        decimal dRate = portfolio.ExpectedAnnualReturn.Value / 100m / 365m;
+                        currentNav = latestPrice.NAV * (decimal)Math.Pow(1 + (double)dRate, days);
+                    }
+                }
+
+                totalValueNew += up.Units * currentNav;
+            }
+
+            // --- AGGREGATE ---
+            var totalInvested = totalInvestedLegacy + totalInvestedNew;
+            var totalValue = totalValueLegacy + totalValueNew;
             var profit = totalValue - totalInvested;
             var returnPercentage = totalInvested == 0 ? 0 : (profit / totalInvested) * 100;
 

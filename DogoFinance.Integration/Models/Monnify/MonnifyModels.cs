@@ -171,10 +171,15 @@ namespace DogoFinance.Integration.Models.Monnify
 
     public class WebhookEventData
     {
+        // For Deposits
         public string paymentReference { get; set; } = null!;
         public string accountReference { get; set; } = null!;
         public decimal amountPaid { get; set; }
         public string paymentStatus { get; set; } = null!;
+
+        // For Disbursements
+        public string reference { get; set; } = null!;
+        public decimal amount { get; set; }
     }
 
     public class BvnMatchRequest

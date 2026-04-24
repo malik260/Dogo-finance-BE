@@ -53,6 +53,7 @@ namespace DogoFinance.DataAccess.Layer
 
         private IReservedAccountRepository? _reservedAccounts;
         public IReservedAccountRepository ReservedAccounts => _reservedAccounts ??= CreateRepository<ReservedAccountRepository>();
+        public DogoFinance.DataAccess.Layer.Interfaces.Base.IDbRepository GenericRepository => _sharedRepo;
 
         public async Task<int> SaveChangesAsync() => await _context.SaveChangesAsync();
         public async Task BeginTransactionAsync() => await _sharedRepo.BeginTrans();

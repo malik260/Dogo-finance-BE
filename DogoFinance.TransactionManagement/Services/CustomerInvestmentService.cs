@@ -5,6 +5,7 @@ using DogoFinance.DataAccess.Layer.Models.Entities;
 using DogoFinance.DataAccess.Layer.Repositories.Base;
 using DogoFinance.TransactionManagement.Interfaces;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Caching.Memory;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,11 +18,13 @@ namespace DogoFinance.TransactionManagement.Services
     {
         private readonly IUnitOfWork _uow;
         private readonly ILogger<CustomerInvestmentService> _logger;
+        private readonly IMemoryCache _cache;
 
-        public CustomerInvestmentService(IUnitOfWork uow, ILogger<CustomerInvestmentService> logger)
+        public CustomerInvestmentService(IUnitOfWork uow, ILogger<CustomerInvestmentService> logger, IMemoryCache cache)
         {
             _uow = uow;
             _logger = logger;
+            _cache = cache;
         }
 
         public async Task<ApiResponse> InvestAsync(InvestRequestDto request, long customerId)
@@ -182,6 +185,8 @@ namespace DogoFinance.TransactionManagement.Services
                 // COMMIT TRANSACTION
                 await _uow.CommitAsync();
 
+                _cache.Remove($"portfolio_summary_{customerId}");
+
                 response.SetMessage("Investment processed successfully", true, new { amountInvested = totalInvested });
             }
             catch (Exception ex)
@@ -317,6 +322,8 @@ namespace DogoFinance.TransactionManagement.Services
                 // COMMIT
                 await _uow.CommitAsync();
 
+                _cache.Remove($"portfolio_summary_{customerId}");
+
                 response.SetMessage("Portfolio liquidation processed successfully", true, new { amountSold = totalSoldAmount });
             }
             catch (Exception ex)
@@ -333,7 +340,16 @@ namespace DogoFinance.TransactionManagement.Services
             var response = new ApiResponse();
             try
             {
-                var summary = await _uow.Portfolios.GetPortfolioSummaryMetrics(customerId);
+                var customerInfo = await _uow.Customers.GetByUserId(customerId);
+                if (customerInfo == null) return new ApiResponse { Message = "Customer not found", Status = 404 };
+
+                string cacheKey = $"portfolio_summary_{customerInfo.CustomerId}";
+                
+                var summary = await _cache.GetOrCreateAsync(cacheKey, async entry => {
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1);
+                    return await _uow.Portfolios.GetPortfolioSummaryMetrics(customerInfo.CustomerId);
+                });
+
                 response.SetMessage("Portfolio summary retrieved successfully", true, summary);
             }
             catch (Exception ex)

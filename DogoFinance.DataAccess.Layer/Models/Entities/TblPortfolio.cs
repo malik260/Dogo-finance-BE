@@ -21,6 +21,15 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         [Column(TypeName = "decimal(18, 4)")]
         public decimal? ExpectedAnnualReturn { get; set; }
         public bool IsActive { get; set; }
+        
+        public int LockInPeriodDays { get; set; }
+        public int MinHoldingPeriodDays { get; set; }
+        [Column(TypeName = "decimal(18, 4)")]
+        public decimal ExitFeePercentage { get; set; }
+        public int NoticePeriodDays { get; set; }
+        [Column(TypeName = "decimal(18, 2)")]
+        public decimal ApprovalThresholdAmount { get; set; }
+
         public DateTime CreatedAt { get; set; }
 
         [ForeignKey("PortfolioTypeId")]

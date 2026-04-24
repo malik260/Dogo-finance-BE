@@ -18,5 +18,37 @@ namespace DogoFinance.AdminManagement.Interfaces
         Task<ApiResponse> ListClients();
         Task<ApiResponse> GetAccessRightsHierarchy(int roleId);
         Task<ApiResponse> UpdateRoleAccessRights(int roleId, List<int> accessRightIds);
+
+        // Address Verifications
+        Task<ApiResponse> ListAddressVerifications(string? status);
+        Task<ApiResponse> ReviewAddressVerification(AdminAddressReviewRequest request, long adminUserId);
+
+        Task<ApiResponse> GetActivePortfolios();
+
+        // System Settings
+        Task<ApiResponse> GetSystemSettings();
+        Task<ApiResponse> UpdateSystemSettings(TblSystemSetting settings);
+
+        // Withdrawal Management
+        Task<ApiResponse> ListWithdrawalRequests(string? status);
+        Task<ApiResponse> ReviewWithdrawalRequest(AdminWithdrawalReviewRequest request, long adminUserId);
+
+        // Liquidation Management
+        Task<ApiResponse> ListLiquidationRequests(int? status);
+        Task<ApiResponse> ReviewLiquidationRequest(AdminLiquidationReviewRequest request, long adminUserId);
+    }
+
+    public class AdminWithdrawalReviewRequest
+    {
+        public long RequestId { get; set; }
+        public bool Approved { get; set; }
+        public string? AdminNotes { get; set; }
+    }
+
+    public class AdminLiquidationReviewRequest
+    {
+        public long RequestId { get; set; }
+        public bool Approved { get; set; }
+        public string? AdminNotes { get; set; }
     }
 }

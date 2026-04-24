@@ -16,6 +16,7 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
             TblNextOfKins = new HashSet<TblNextOfKin>();
             TblWallets = new HashSet<TblWallet>();
             TblCustomerBanks = new HashSet<TblCustomerBank>();
+            TblCustomerAddressVerifications = new HashSet<TblCustomerAddressVerification>();
         }
 
         [Key]
@@ -76,5 +77,7 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public virtual ICollection<TblWallet> TblWallets { get; set; }
         [InverseProperty(nameof(TblCustomerBank.Customer))]
         public virtual ICollection<TblCustomerBank> TblCustomerBanks { get; set; }
+        [InverseProperty(nameof(TblCustomerAddressVerification.Customer))]
+        public virtual ICollection<TblCustomerAddressVerification> TblCustomerAddressVerifications { get; set; }
     }
 }

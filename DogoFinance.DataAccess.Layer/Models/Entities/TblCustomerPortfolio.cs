@@ -14,6 +14,13 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public int PortfolioId { get; set; }
         [Column(TypeName = "decimal(18, 4)")]
         public decimal TotalInvested { get; set; }
+
+        [Column(TypeName = "decimal(18, 6)")]
+        public decimal Units { get; set; }
+
+        [Column(TypeName = "decimal(18, 4)")]
+        public decimal InvestedAmount { get; set; }
+
         public DateTime CreatedAt { get; set; }
 
         [ForeignKey("CustomerId")]

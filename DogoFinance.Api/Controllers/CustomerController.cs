@@ -127,5 +127,33 @@ namespace DogoFinance.Api.Controllers
             var response = await _customerService.UpdateProfile(long.Parse(userIdStr), request);
             return Ok(response);
         }
+
+        [HttpGet("address-doc-types")]
+        public async Task<ActionResult<ApiResponse>> GetAddressDocTypes()
+        {
+            var response = await _customerService.GetAddressDocTypes();
+            return Ok(response);
+        }
+
+        [HttpPost("verify-address")]
+        public async Task<ActionResult<ApiResponse>> VerifyAddress([FromForm] AddressVerificationRequest request)
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
+
+            // In a real app, customer ID might be linked to User ID 1:1
+            var response = await _customerService.InitiateAddressVerification(long.Parse(userIdStr), request);
+            return Ok(response);
+        }
+
+        [HttpGet("verifications")]
+        public async Task<ActionResult<ApiResponse>> GetVerifications()
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
+
+            var response = await _customerService.GetVerificationStatuses(long.Parse(userIdStr));
+            return Ok(response);
+        }
     }
 }

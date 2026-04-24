@@ -11,10 +11,12 @@ using DogoFinance.TransactionManagement.Interfaces;
 using DogoFinance.TransactionManagement.Services;
 using DogoFinance.ProductManagement.Interfaces;
 using DogoFinance.ProductManagement.Services;
-using DogoFinance.DataAccess.Layer;
-using DogoFinance.DataAccess.Layer.Global;
 using DogoFinance.DataAccess.Layer.Interfaces;
 using DogoFinance.DataAccess.Layer.Repositories.Base;
+using DogoFinance.AccountingManagement.Interfaces;
+using DogoFinance.AccountingManagement.Services;
+using DogoFinance.DataAccess.Layer;
+using DogoFinance.DataAccess.Layer.Global;
 
 namespace DogoFinance.Api.Extensions
 {
@@ -24,6 +26,7 @@ namespace DogoFinance.Api.Extensions
         {
             // Register Unit of Work
             services.AddScoped<IUnitOfWork, UnitOfWork>();
+            services.AddMemoryCache();
 
             // Register BLL Services
             services.AddScoped<ICustomerService, CustomerService>();
@@ -36,16 +39,20 @@ namespace DogoFinance.Api.Extensions
             services.AddScoped<IPinService, PinService>();
             services.AddScoped<IAdminService, AdminService>();
             services.AddScoped<ISystemSettingService, SystemSettingService>();
+            services.AddScoped<IAccountingService, AccountingService>();
             services.AddSingleton<JwtHelper>();
 
-            // Register Monnify
+            // Register Monnify & Integration
             services.AddHttpClient<IMonnifyService, MonnifyService>();
+            services.AddScoped<ICloudinaryService, CloudinaryService>();
+            services.AddScoped<IDocumentProcessingService, DocumentProcessingService>();
 
             // Register Transaction Services
             services.AddScoped<ITransactionService, TransactionService>();
             services.AddScoped<ICustomerPortfolioService, CustomerPortfolioService>();
             services.AddScoped<ICustomerHoldingService, CustomerHoldingService>();
             services.AddScoped<ICustomerInvestmentService, CustomerInvestmentService>();
+            services.AddScoped<ITemporaryInvestmentService, TemporaryInvestmentService>();
 
             // Register Portfolio & Product Services
             services.AddScoped<IAssetClassService, AssetClassService>();

@@ -11,6 +11,9 @@ using DogoFinance.TransactionManagement.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using DogoFinance.AccountingManagement.Interfaces;
+using DogoFinance.DataAccess.Layer.DTO;
 
 namespace DogoFinance.TransactionManagement.Services
 {
@@ -21,14 +24,19 @@ namespace DogoFinance.TransactionManagement.Services
         private readonly IEmailService _emailService;
         private readonly ILogger<TransactionService> _logger;
         private readonly IConfiguration _configuration;
+        private readonly IAccountingService _accountingService;
 
-        public TransactionService(IUnitOfWork uow, IMonnifyService monnifyService, IEmailService emailService, ILogger<TransactionService> logger, IConfiguration configuration)
+        public TransactionService(IUnitOfWork uow, IMonnifyService monnifyService, IEmailService emailService, ILogger<TransactionService> logger, IConfiguration configuration, IAccountingService accountingService)
         {
             _uow = uow;
             _monnifyService = monnifyService;
             _emailService = emailService;
             _logger = logger;
             _configuration = configuration;
+            _accountingService = accountingService;
+            
+            // Link the base repository to the Unit of Work's shared context to avoid deadlocks
+            SetSharedRepository(_uow.GenericRepository);
         }
 
         private async Task LogLedger(long transactionId, long walletId, int entryType, decimal amount, decimal balanceAfter, string narration)
@@ -211,8 +219,21 @@ namespace DogoFinance.TransactionManagement.Services
                 };
                 await _uow.Transactions.CreateTransaction(transaction);
 
-                // Log Ledger
+                // Log Ledger (Sub-ledger)
                 await LogLedger(transaction.TransactionId, wallet.WalletId, EntryType.CREDIT, payment.Amount, wallet.Balance, "Deposit via Card");
+
+                // Post to General Ledger (Double-Entry)
+                await _accountingService.PostJournalAsync(new JournalEntryDto
+                {
+                    Reference = reference,
+                    Narration = $"Wallet Deposit - Customer ID: {customer.CustomerId}",
+                    TransactionDate = DateTime.UtcNow,
+                    Lines = new List<JournalLineDto>
+                    {
+                        new JournalLineDto { AccountCode = "1110", Debit = payment.Amount, Credit = 0, Narration = "Bank Inflow (Monnify)" }, // Dr Bank
+                        new JournalLineDto { AccountCode = "2110", Debit = 0, Credit = payment.Amount, Narration = "Customer Wallet Liability" } // Cr Wallet
+                    }
+                });
 
                 await _uow.CommitAsync();
                 response.SetMessage("Wallet credited successfully", 200);
@@ -327,85 +348,179 @@ namespace DogoFinance.TransactionManagement.Services
                 }
 
                 var data = JsonSerializer.Deserialize<MonnifyWebhookPayload>(payload);
-                if (data == null || data.eventType != "SUCCESSFUL_TRANSACTION")
+                if (data == null)
                 {
                     response.Status = 200;
                     return response;
                 }
 
-                var eventData = data.eventData;
-
-                // Check duplicate
-                var existingPayment = await _uow.Payments.GetByReference(eventData.paymentReference);
-                if (existingPayment != null && (existingPayment.Status == "Completed" || existingPayment.Status == "SUCCESS"))
+                if (data.eventType == "SUCCESSFUL_TRANSACTION")
                 {
-                    response.Status = 200;
-                    return response;
+                    return await HandleDepositWebhook(data.eventData);
+                }
+                else if (data.eventType == "SUCCESSFUL_DISBURSEMENT")
+                {
+                    return await HandleDisbursementWebhook(data.eventData);
                 }
 
-                var reservedAcc = await _uow.ReservedAccounts.GetByAccountReference(eventData.accountReference);
-                if (reservedAcc == null)
-                {
-                    response.SetError("Reserved account not found", 404);
-                    return response;
-                }
-
-                var customer = await _uow.Customers.GetByUserId(reservedAcc.UserId);
-                if (customer == null) { response.SetError("Customer records missing", 404); return response; }
-
-                var wallet = await _uow.Wallets.GetByCustomerId(customer.CustomerId);
-                if (wallet == null) { response.SetError("Wallet not found", 404); return response; }
-
-                await _uow.BeginTransactionAsync();
-
-                // Credit Wallet
-                wallet.Balance += eventData.amountPaid;
-                await _uow.Wallets.UpdateWallet(wallet);
-
-                // Create or update payment log
-                if (existingPayment == null)
-                {
-                    existingPayment = new TblPayment
-                    {
-                        UserId = customer.UserId,
-                        Amount = eventData.amountPaid,
-                        ProviderReference = eventData.paymentReference,
-                        Status = "Completed",
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    await _uow.Payments.SavePayment(existingPayment);
-                }
-                else
-                {
-                    existingPayment.Status = "Completed";
-                    await _uow.Payments.SavePayment(existingPayment);
-                }
-
-                // Create Transaction
-                var transaction = new TblTransaction
-                {
-                    Reference = eventData.paymentReference,
-                    TransactionType = TransactionType.DEPOSIT,
-                    Amount = eventData.amountPaid,
-                    Status = 1, // SUCCESS
-                    Narration = "Transfer Deposit Received",
-                    PaymentId = existingPayment.Id,
-                    InitiatedByUserId = customer.UserId,
-                    CreatedAt = DateTime.UtcNow
-                };
-                await _uow.Transactions.CreateTransaction(transaction);
-
-                // Ledger Entry
-                await LogLedger(transaction.TransactionId, wallet.WalletId, EntryType.CREDIT, eventData.amountPaid, wallet.Balance, "Bank Transfer Deposit");
-
-                await _uow.CommitAsync();
-                response.SetMessage("Webhook processed successfully", 200);
+                response.Status = 200;
+                return response;
             }
             catch (Exception ex)
             {
-                await _uow.RollbackAsync();
-                response.SetError(ex.Message, 500);
+                _logger.LogError(ex, "Webhook processing error");
+                response.SetError("Processing error", 200); // Always return 200 to Monnify to stop retries if it's a code error
+                return response;
             }
+        }
+
+        private async Task<ApiResponse> HandleDepositWebhook(WebhookEventData eventData)
+        {
+            var response = new ApiResponse();
+            // Check duplicate
+            var existingPayment = await _uow.Payments.GetByReference(eventData.paymentReference);
+            if (existingPayment != null && (existingPayment.Status == "Completed" || existingPayment.Status == "SUCCESS"))
+            {
+                response.Status = 200;
+                return response;
+            }
+
+            var reservedAcc = await _uow.ReservedAccounts.GetByAccountReference(eventData.accountReference);
+            if (reservedAcc == null)
+            {
+                response.SetError("Reserved account not found", 404);
+                return response;
+            }
+
+            var customer = await _uow.Customers.GetByUserId(reservedAcc.UserId);
+            if (customer == null) { response.SetError("Customer records missing", 404); return response; }
+
+            var wallet = await _uow.Wallets.GetByCustomerId(customer.CustomerId);
+            if (wallet == null) { response.SetError("Wallet not found", 404); return response; }
+
+            await _uow.BeginTransactionAsync();
+
+            // Credit Wallet
+            wallet.Balance += eventData.amountPaid;
+            await _uow.Wallets.UpdateWallet(wallet);
+
+            // Create or update payment log
+            if (existingPayment == null)
+            {
+                existingPayment = new TblPayment
+                {
+                    UserId = customer.UserId,
+                    Amount = eventData.amountPaid,
+                    ProviderReference = eventData.paymentReference,
+                    Status = "Completed",
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _uow.Payments.SavePayment(existingPayment);
+            }
+            else
+            {
+                existingPayment.Status = "Completed";
+                await _uow.Payments.SavePayment(existingPayment);
+            }
+
+            // Create Transaction
+            var transaction = new TblTransaction
+            {
+                Reference = eventData.paymentReference,
+                TransactionType = TransactionType.DEPOSIT,
+                Amount = eventData.amountPaid,
+                Status = 1, // SUCCESS
+                Narration = "Transfer Deposit Received",
+                PaymentId = existingPayment.Id,
+                InitiatedByUserId = customer.UserId,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _uow.Transactions.CreateTransaction(transaction);
+
+            // Ledger Entry (Sub-ledger)
+            await LogLedger(transaction.TransactionId, wallet.WalletId, EntryType.CREDIT, eventData.amountPaid, wallet.Balance, "Bank Transfer Deposit");
+
+            // Post to General Ledger (Double-Entry)
+            await _accountingService.PostJournalAsync(new JournalEntryDto
+            {
+                Reference = eventData.paymentReference,
+                Narration = $"Transfer Deposit - Customer ID: {customer.CustomerId}",
+                TransactionDate = DateTime.UtcNow,
+                Lines = new List<JournalLineDto>
+                {
+                    new JournalLineDto { AccountCode = "1110", Debit = eventData.amountPaid, Credit = 0, Narration = "Bank Inflow (Transfer)" }, // Dr Bank
+                    new JournalLineDto { AccountCode = "2110", Debit = 0, Credit = eventData.amountPaid, Narration = "Customer Wallet Liability" } // Cr Wallet
+                }
+            });
+
+            await _uow.CommitAsync();
+            response.SetMessage("Deposit processed", 200);
+            return response;
+        }
+
+        private async Task<ApiResponse> HandleDisbursementWebhook(WebhookEventData eventData)
+        {
+            var response = new ApiResponse();
+            var transaction = await BaseRepository().FindEntity<TblTransaction>(t => t.Reference == eventData.reference);
+            
+            if (transaction == null)
+            {
+                _logger.LogWarning("Disbursement webhook received for unknown reference: {Ref}", eventData.reference);
+                return new ApiResponse { Status = 200 }; // Still return 200
+            }
+
+            if (transaction.Status == 1) // Already successful
+            {
+                return new ApiResponse { Status = 200 };
+            }
+
+            var user = await BaseRepository().FindEntity<TblUser>(u => u.UserId == transaction.InitiatedByUserId);
+            if (user == null) return new ApiResponse { Status = 200 };
+
+            var customer = await _uow.Customers.GetByUserId(user.UserId);
+            if (customer == null) return new ApiResponse { Status = 200 };
+
+            var wallet = await _uow.Wallets.GetByCustomerId(customer.CustomerId);
+            if (wallet == null) return new ApiResponse { Status = 200 };
+
+            await _uow.BeginTransactionAsync();
+
+            try
+            {
+                // 1. Debit Wallet
+                wallet.Balance -= eventData.amount;
+                await _uow.Wallets.UpdateWallet(wallet);
+
+                // 2. Update Transaction
+                transaction.Status = 1; // SUCCESS
+                transaction.Narration += " (Confirmed)";
+                await BaseRepository().Update(transaction);
+
+                // 3. Ledger Logging
+                await LogLedger(transaction.TransactionId, wallet.WalletId, EntryType.DEBIT, -eventData.amount, wallet.Balance, "Withdrawal (Automated Success)");
+
+                // 4. Post to General Ledger (Double-Entry)
+                await _accountingService.PostJournalAsync(new JournalEntryDto
+                {
+                    Reference = eventData.reference,
+                    Narration = $"Withdrawal - Customer ID: {customer.CustomerId}",
+                    TransactionDate = DateTime.UtcNow,
+                    Lines = new List<JournalLineDto>
+                    {
+                        new JournalLineDto { AccountCode = "2110", Debit = eventData.amount, Credit = 0, Narration = "Wallet Liability Reduced" }, // Dr Wallet
+                        new JournalLineDto { AccountCode = "1110", Debit = 0, Credit = eventData.amount, Narration = "Bank Outflow" } // Cr Bank
+                    }
+                });
+
+                await _uow.CommitAsync();
+                response.SetMessage("Disbursement processed", 200);
+            }
+            catch (Exception)
+            {
+                await _uow.RollbackAsync();
+                throw;
+            }
+
             return response;
         }
 
@@ -425,23 +540,31 @@ namespace DogoFinance.TransactionManagement.Services
         public async Task<ApiResponse> InitiateWithdrawal(WithdrawalRequest request)
         {
             var response = new ApiResponse();
-            var db = await BaseRepository().BeginTrans();
+            await _uow.BeginTransactionAsync();
 
             try
             {
-                var customer = await BaseRepository().FindEntity<TblCustomer>(request.CustomerId);
-                if (customer == null) return new ApiResponse { Message = "Customer not found", Status = 404 };
+                var customer = await _uow.GenericRepository.FindEntity<TblCustomer>(request.CustomerId);
+                if (customer == null) {
+                    await _uow.RollbackAsync();
+                    return new ApiResponse { Message = "Customer not found", Status = 404 };
+                }
 
-                var user = await BaseRepository().FindEntity<TblUser>(customer.UserId);
-                if (user == null) return new ApiResponse { Message = "User account not found", Status = 404 };
+                var user = await _uow.GenericRepository.FindEntity<TblUser>(customer.UserId);
+                if (user == null) {
+                    await _uow.RollbackAsync();
+                    return new ApiResponse { Message = "User account not found", Status = 404 };
+                }
 
                 if (!user.IsPinSet)
                 {
+                    await _uow.RollbackAsync();
                     return new ApiResponse { Message = "Transaction PIN not setup. Please set it first.", Status = 400 };
                 }
 
                 if (!HashHelper.VerifyHash(request.Pin, user.TransactionPinHash!, user.TransactionPinSalt!))
                 {
+                    await _uow.RollbackAsync();
                     return new ApiResponse { Message = "Incorrect transaction PIN.", Status = 401 };
                 }
 
@@ -450,33 +573,72 @@ namespace DogoFinance.TransactionManagement.Services
                 {
                     if (string.IsNullOrEmpty(request.Otp))
                     {
+                        await _uow.RollbackAsync();
                         return new ApiResponse { Message = "2FA is enabled. Please provide the OTP sent to your email.", Boolean = false, Status = 403 };
                     }
 
                     if (user.VerificationCode != request.Otp || user.VerificationExpiry < DateTime.UtcNow)
                     {
+                        await _uow.RollbackAsync();
                         return new ApiResponse { Message = "Invalid or expired OTP code.", Boolean = false, Status = 403 };
                     }
                     
                     // Clear OTP after successful use
                     user.VerificationCode = null;
                     user.VerificationExpiry = null;
-                    await BaseRepository().Update(user);
+                    await _uow.GenericRepository.Update(user);
                 }
 
                 var wallet = await _uow.Wallets.GetByCustomerId(request.CustomerId);
                 if (wallet == null || wallet.Balance < request.Amount)
                 {
+                    await _uow.RollbackAsync();
                     return new ApiResponse { Message = "Insufficient balance", Status = 400 };
                 }
 
+                // Check Threshold
+                var settings = await _uow.GenericRepository.AsQueryable<TblSystemSetting>(s => true).FirstOrDefaultAsync();
+                decimal threshold = settings?.WithdrawalAutoThreshold ?? 50000;
+                bool needsApproval = request.Amount > threshold;
+
                 var reference = $"WD_{DateTime.UtcNow.Ticks}";
 
-                // 1. Debit Wallet immediately
-                wallet.Balance -= request.Amount;
-                await _uow.Wallets.UpdateWallet(wallet);
+                if (needsApproval)
+                {
+                    // Create Admin Review Record
+                    var withdrawalReq = new TblWithdrawalRequest
+                    {
+                        CustomerId = customer.CustomerId,
+                        Amount = request.Amount,
+                        Status = "Pending",
+                        Reference = reference,
+                        Narration = (request.Narration ?? "Fund Withdrawal") + " (Pending Approval)",
+                        BankCode = request.BankCode,
+                        AccountNumber = request.AccountNumber,
+                        InitiatedAt = DateTime.UtcNow
+                    };
+                    await _uow.GenericRepository.Insert(withdrawalReq);
 
-                // 2. Create Transaction
+                    // Create Transaction record for user visibility (but no debit yet)
+                    var pendingTransaction = new TblTransaction
+                    {
+                        Reference = reference,
+                        TransactionType = TransactionType.WITHDRAWAL,
+                        Amount = request.Amount,
+                        Status = 0, // PENDING
+                        Narration = (request.Narration ?? "Fund Withdrawal") + " (Pending Approval)",
+                        InitiatedByUserId = customer.UserId,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _uow.Transactions.CreateTransaction(pendingTransaction);
+
+                    await _uow.CommitAsync();
+                    return new ApiResponse { Success = true, Message = "Withdrawal request submitted for administrative review. Funds will be deducted upon approval.", Status = 200 };
+                }
+
+                // --- ONLY FOR AUTOMATED WITHDRAWALS (BELOW THRESHOLD) ---
+
+                // 1. Create Transaction (NO DEBIT during initiation per user request)
                 var transaction = new TblTransaction
                 {
                     Reference = reference,
@@ -489,10 +651,7 @@ namespace DogoFinance.TransactionManagement.Services
                 };
                 await _uow.Transactions.CreateTransaction(transaction);
 
-                // LEDGER LOGGING (Debit)
-                await LogLedger(transaction.TransactionId, wallet.WalletId, EntryType.DEBIT, -request.Amount, wallet.Balance, "Withdrawal Initiation");
-
-                // 3. Call Monnify for Disbursement
+                // 2. Call Monnify for Disbursement (Automated)
                 var monnifyRequest = new SingleTransferRequest
                 {
                     Amount = request.Amount,
@@ -506,15 +665,10 @@ namespace DogoFinance.TransactionManagement.Services
 
                 if (monnifyResult != null && monnifyResult.RequestSuccessful)
                 {
-                    // If immediate success (some banks), or keep as pending
-                    if (monnifyResult.ResponseBody.Status == "SUCCESS")
+                    // We keep transaction as PENDING. 
+                    // Wallet impact and transaction success will be handled via webhook or status check.
+                    if (monnifyResult.ResponseBody.Status == "FAILED")
                     {
-                        transaction.Status = 1;
-                        await BaseRepository().Update(transaction);
-                    }
-                    else if (monnifyResult.ResponseBody.Status == "FAILED")
-                    {
-                        // Rollback wallet in real scenario or handle failure
                         throw new Exception("Monnify transfer returned FAILED status.");
                     }
                 }
@@ -523,13 +677,13 @@ namespace DogoFinance.TransactionManagement.Services
                     throw new Exception("Monnify API call failed.");
                 }
 
-                await BaseRepository().CommitTrans();
+                await _uow.CommitAsync();
                 response.SetMessage("Withdrawal initiated successfully", true);
                 return response;
             }
             catch (Exception ex)
             {
-                await BaseRepository().RollbackTrans();
+                await _uow.RollbackAsync();
                 _logger.LogError(ex, "Withdrawal Initiation Error");
                 response.SetError(ex.Message, 500);
                 return response;
@@ -545,6 +699,7 @@ namespace DogoFinance.TransactionManagement.Services
             var user = await BaseRepository().FindEntity<TblUser>(customer.UserId);
             if (user == null) return new ApiResponse { Message = "User not found", Status = 404 };
 
+            // 2. 2FA Check
             if (user.Is2faEnabled != true)
             {
                 return new ApiResponse { Message = "2FA is not enabled for this user", Status = 400 };
@@ -567,6 +722,28 @@ namespace DogoFinance.TransactionManagement.Services
 
             response.SetMessage("OTP sent successfully to your email.", true);
             return response;
+        }
+
+        public async Task<ApiResponse> ValidateWithdrawalOtp(long customerId, string otp)
+        {
+            var response = new ApiResponse();
+            var customer = await BaseRepository().FindEntity<TblCustomer>(customerId);
+            if (customer == null) return new ApiResponse { Message = "Customer not found", Status = 404 };
+
+            var user = await BaseRepository().FindEntity<TblUser>(customer.UserId);
+            if (user == null) return new ApiResponse { Message = "User not found", Status = 404 };
+
+            if (user.VerificationCode != otp)
+            {
+                return new ApiResponse { Message = "The OTP code you entered is incorrect.", Success = false, Status = 400 };
+            }
+
+            if (user.VerificationExpiry < DateTime.UtcNow)
+            {
+                return new ApiResponse { Message = "This OTP code has expired. Please request a new one.", Success = false, Status = 400 };
+            }
+
+            return new ApiResponse { Message = "OTP verified successfuly", Success = true, Status = 200 };
         }
 
         public async Task<ApiResponse> GetTransactionHistory(long userId)

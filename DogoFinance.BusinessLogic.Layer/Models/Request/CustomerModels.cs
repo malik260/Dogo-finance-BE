@@ -43,4 +43,23 @@ namespace DogoFinance.BusinessLogic.Layer.Models.Request
         public string? LastName { get; set; }
         public string? Phone { get; set; }
     }
+
+    public class AddressVerificationRequest
+    {
+        [Required]
+        public int DocTypeId { get; set; }
+        
+        [Required]
+        public Microsoft.AspNetCore.Http.IFormFile File { get; set; } = null!;
+    }
+
+    public class AdminAddressReviewRequest
+    {
+        public long VerificationId { get; set; }
+        public bool Approved { get; set; }
+        public string? AdminNotes { get; set; }
+        public string? CorrectedAddress { get; set; }
+        public string? CorrectedCity { get; set; }
+        public string? CorrectedState { get; set; }
+    }
 }

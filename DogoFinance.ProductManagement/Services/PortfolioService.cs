@@ -43,6 +43,13 @@ namespace DogoFinance.ProductManagement.Services
                         Description = entity.Description,
                         ExpectedAnnualReturn = entity.ExpectedAnnualReturn,
                         IsActive = entity.IsActive,
+                        
+                        LockInPeriodDays = entity.LockInPeriodDays,
+                        MinHoldingPeriodDays = entity.MinHoldingPeriodDays,
+                        ExitFeePercentage = entity.ExitFeePercentage,
+                        NoticePeriodDays = entity.NoticePeriodDays,
+                        ApprovalThresholdAmount = entity.ApprovalThresholdAmount,
+
                         Allocations = new List<PortfolioAllocationRuleDto>()
                     };
 
@@ -114,6 +121,12 @@ namespace DogoFinance.ProductManagement.Services
                 entity.Description = model.Description;
                 entity.ExpectedAnnualReturn = model.ExpectedAnnualReturn;
                 entity.IsActive = model.IsActive;
+
+                entity.LockInPeriodDays = model.LockInPeriodDays;
+                entity.MinHoldingPeriodDays = model.MinHoldingPeriodDays;
+                entity.ExitFeePercentage = model.ExitFeePercentage;
+                entity.NoticePeriodDays = model.NoticePeriodDays;
+                entity.ApprovalThresholdAmount = model.ApprovalThresholdAmount;
                 
                 if (model.PortfolioId == 0) entity.CreatedAt = DateTime.UtcNow;
 
