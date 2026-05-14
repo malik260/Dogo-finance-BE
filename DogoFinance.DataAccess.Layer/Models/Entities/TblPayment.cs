@@ -22,6 +22,8 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public int PaymentProvider { get; set; }
         [StringLength(100)]
         public string? ProviderReference { get; set; }
+        [StringLength(100)]
+        public string? PaymentReference { get; set; }
         [StringLength(20)]
         public string Status { get; set; } = null!;
         public DateTime CreatedAt { get; set; }

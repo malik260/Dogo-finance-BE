@@ -173,13 +173,31 @@ namespace DogoFinance.Integration.Models.Monnify
     {
         // For Deposits
         public string paymentReference { get; set; } = null!;
-        public string accountReference { get; set; } = null!;
+        public string? accountReference { get; set; } // transfer only
         public decimal amountPaid { get; set; }
         public string paymentStatus { get; set; } = null!;
+        public string paymentMethod { get; set; } = null!;
+
+        public CustomerDto? customer { get; set; }
+
+        public CardDetailsDto? cardDetails { get; set; }
 
         // For Disbursements
         public string reference { get; set; } = null!;
         public decimal amount { get; set; }
+    }
+
+    public class CustomerDto
+    {
+        public string email { get; set; } = null!;
+        public string name { get; set; } = null!;
+    }
+
+    public class CardDetailsDto
+    {
+        public string? cardType { get; set; }
+        public string? last4 { get; set; }
+        public string? bank { get; set; }
     }
 
     public class BvnMatchRequest

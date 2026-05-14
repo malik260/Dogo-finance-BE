@@ -144,12 +144,14 @@ namespace DogoFinance.Api.Controllers
         [HttpPost("webhook/monnify")]
         public async Task<IActionResult> MonnifyWebhook()
         {
-            var signature = Request.Headers["X-Monnify-Signature"].ToString();
+            var signature = Request.Headers["monnify-signature"].FirstOrDefault();
+            
             using var reader = new StreamReader(Request.Body);
             var payload = await reader.ReadToEndAsync();
 
             var response = await _transactionService.HandleMonnifyWebhook(payload, signature);
-            return StatusCode(response.Status, response);
+            //return StatusCode(response.Status, response);
+            return Ok();
         }
 
         [HttpGet("deposit/virtual-account")]
@@ -158,7 +160,7 @@ namespace DogoFinance.Api.Controllers
             Console.WriteLine("--- GetVirtualAccount Endpoint Hit ---");
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
-            
+
             var response = await _transactionService.CreateVirtualAccount(long.Parse(userIdStr));
             return StatusCode(response.Status, response);
         }
@@ -168,7 +170,7 @@ namespace DogoFinance.Api.Controllers
         {
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
-            
+
             return Ok(await _investmentService.GetPortfolioSummary(long.Parse(userIdStr)));
         }
 

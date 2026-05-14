@@ -33,6 +33,19 @@ namespace DogoFinance.DataAccess.Layer.Repositories
     {
         public async Task<TblPayment?> GetByReference(string reference)
             => await BaseRepository().FindEntity<TblPayment>(p => p.ProviderReference == reference);
+        public async Task<TblPayment?> GetByPaymentRef(string paymentRef)
+        {
+            try
+            {
+                return await BaseRepository().FindEntity<TblPayment>(p => p.PaymentReference == paymentRef);
+
+            }
+            catch (Exception ex)
+            {
+
+                throw;
+            }
+        }
 
         public async Task SavePayment(TblPayment payment)
         {

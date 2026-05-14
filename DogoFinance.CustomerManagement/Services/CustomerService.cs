@@ -24,8 +24,9 @@ namespace DogoFinance.CustomerManagement.Services
         private readonly IMonnifyService _monnifyService;
         private readonly ICloudinaryService _cloudinaryService;
         private readonly IDocumentProcessingService _docProcessor;
+        private readonly IYouVerifyService _youVerifyService;
 
-        public CustomerService(IUnitOfWork uow, IEmailService emailService, ILogger<CustomerService> logger, IConfiguration configuration, ITransactionService transactionService, IMonnifyService monnifyService, ICloudinaryService cloudinaryService, IDocumentProcessingService docProcessor)
+        public CustomerService(IUnitOfWork uow, IEmailService emailService, ILogger<CustomerService> logger, IConfiguration configuration, ITransactionService transactionService, IMonnifyService monnifyService, ICloudinaryService cloudinaryService, IDocumentProcessingService docProcessor, IYouVerifyService youVerifyService)
         {
             _uow = uow;
             _emailService = emailService;
@@ -35,6 +36,7 @@ namespace DogoFinance.CustomerManagement.Services
             _monnifyService = monnifyService;
             _cloudinaryService = cloudinaryService;
             _docProcessor = docProcessor;
+            _youVerifyService = youVerifyService;
         }
 
         public async Task<ApiResponse> SignUp(SignUpRequest request)
@@ -116,8 +118,11 @@ namespace DogoFinance.CustomerManagement.Services
                 await BaseRepository().Insert(userRole);
 
 
-                var baseUrl = _configuration["SystemConfig:FrontendBaseUrl"] ?? "http://localhost:4200";
-                var verificationLink = $"{baseUrl}/verify-email?email={Uri.EscapeDataString(user.Email)}&code={verificationCode}";
+                var baseUrl = (_configuration["SystemConfig:FrontendBaseUrl"] ?? "http://localhost:4200").Trim().TrimEnd('/');
+                //var verificationLink = $"{baseUrl}/verify-email?email={Uri.EscapeDataString(user.Email.Trim())}&code={verificationCode}";
+
+                var verificationLink = $"{baseUrl}/verify-email?email={Uri.EscapeDataString(user.Email.Trim())}" +
+                                        $"&code={Uri.EscapeDataString(verificationCode)}";
 
                 var emailPlaceholders = new Dictionary<string, string>
                 {
@@ -193,8 +198,8 @@ namespace DogoFinance.CustomerManagement.Services
             var customer = await _uow.Customers.GetByUserId(user.UserId);
             var firstName = customer?.FirstName ?? "there";
 
-            var baseUrl = _configuration["SystemConfig:FrontendBaseUrl"] ?? "http://localhost:4200";
-            var verificationLink = $"{baseUrl}/verify-email?email={Uri.EscapeDataString(user.Email)}&code={verificationCode}";
+            var baseUrl = (_configuration["SystemConfig:FrontendBaseUrl"] ?? "http://localhost:4200").Trim().TrimEnd('/');
+            var verificationLink = $"{baseUrl}/verify-email?email={Uri.EscapeDataString(user.Email.Trim())}&code={verificationCode}";
 
             var emailPlaceholders = new Dictionary<string, string>
             {
@@ -307,22 +312,36 @@ namespace DogoFinance.CustomerManagement.Services
 
             if (customer.Bvnverified) return new ApiResponse { Success = true, Message = "BVN already verified", Boolean = true };
 
-            var monnifyRequest = new BvnMatchRequest
+            var youVerifyRequest = new Integration.Models.YouVerify.BvnVerificationRequest
             {
-                bvn = request.Bvn,
-                name = $"{customer.FirstName} {customer.LastName}",
-                dateOfBirth = customer.DateOfBirth.ToString("dd-MMM-yyyy"),
-                mobileNo = customer.PhoneNumber ?? ""
+                Id = request.Bvn,
+                IsSubjectConsent = true,
+                Validations = new Integration.Models.YouVerify.IdentityValidations
+                {
+                    Data = new Integration.Models.YouVerify.IdentityDataValidation
+                    {
+                        FirstName = customer.FirstName,
+                        LastName = customer.LastName,
+                        DateOfBirth = customer.DateOfBirth.ToString("yyyy-MM-dd")
+                    }
+                },
+                Metadata = new Dictionary<string, string> { { "customerId", customerId.ToString() } }
             };
 
-            var monnifyResponse = await _monnifyService.VerifyBvnMatch(monnifyRequest);
+            var youVerifyResponse = await _youVerifyService.VerifyBvn(youVerifyRequest);
 
-            if (monnifyResponse != null && monnifyResponse.requestSuccessful)
+            if (youVerifyResponse != null && youVerifyResponse.Success)
             {
                 // Successful match logic
-                // Typically score > 60 is a good match
-                if (monnifyResponse.responseBody.name.match || monnifyResponse.responseBody.name.score > 60)
+                if (youVerifyResponse.Data?.Status == "found")
                 {
+                    // Ensure the data validation also passed
+                    if (!youVerifyResponse.Data.AllValidationPassed)
+                    {
+                        var messages = youVerifyResponse.Data.Validations?.ValidationMessages ?? "Data validation failed.";
+                        return new ApiResponse { Message = $"BVN details found but validation failed: {messages}", Status = 400 };
+                    }
+
                     customer.Bvn = request.Bvn;
                     customer.Bvnverified = true;
                     customer.BvnverifiedAt = DateTime.UtcNow;
@@ -330,13 +349,13 @@ namespace DogoFinance.CustomerManagement.Services
 
                     await _uow.Customers.SaveCustomer(customer);
 
-                    return new ApiResponse { Success = true, Message = "BVN verified successfully", Boolean = true };
+                    return new ApiResponse { Success = true, Message = "BVN verified successfully", Boolean = true, Data = youVerifyResponse.Data };
                 }
                 
-                return new ApiResponse { Message = "BVN information mismatch. Please ensure details match your bank records.", Status = 400 };
+                return new ApiResponse { Message = "BVN not found or invalid.", Status = 400 };
             }
 
-            return new ApiResponse { Message = monnifyResponse?.responseMessage ?? "BVN verification failed", Status = 400 };
+            return new ApiResponse { Message = youVerifyResponse?.Message ?? "BVN verification failed", Status = 400 };
         }
 
         public async Task<ApiResponse> VerifyNin(long customerId, NinVerificationRequest request)
@@ -346,17 +365,35 @@ namespace DogoFinance.CustomerManagement.Services
 
             if (customer.Ninverified) return new ApiResponse { Success = true, Message = "NIN already verified", Boolean = true };
 
-            var monnifyRequest = new NinVerifyRequest { nin = request.Nin };
-            var monnifyResponse = await _monnifyService.VerifyNin(monnifyRequest);
-
-            if (monnifyResponse != null && monnifyResponse.requestSuccessful)
+            var youVerifyRequest = new Integration.Models.YouVerify.NinVerificationRequest
             {
-                // Check if name matches (simplified)
-                var firstNameMatch = monnifyResponse.responseBody.firstname.Contains(customer.FirstName, StringComparison.OrdinalIgnoreCase);
-                var lastNameMatch = monnifyResponse.responseBody.lastname.Contains(customer.LastName, StringComparison.OrdinalIgnoreCase);
-
-                if (firstNameMatch || lastNameMatch)
+                Id = request.Nin,
+                IsSubjectConsent = true,
+                Validations = new Integration.Models.YouVerify.IdentityValidations
                 {
+                    Data = new Integration.Models.YouVerify.IdentityDataValidation
+                    {
+                        FirstName = customer.FirstName,
+                        LastName = customer.LastName,
+                        DateOfBirth = customer.DateOfBirth.ToString("yyyy-MM-dd")
+                    }
+                },
+                Metadata = new Dictionary<string, string> { { "customerId", customerId.ToString() } }
+            };
+
+            var youVerifyResponse = await _youVerifyService.VerifyNin(youVerifyRequest);
+
+            if (youVerifyResponse != null && youVerifyResponse.Success)
+            {
+                if (youVerifyResponse.Data?.Status == "found")
+                {
+                    // Ensure the data validation also passed
+                    if (!youVerifyResponse.Data.AllValidationPassed)
+                    {
+                        var messages = youVerifyResponse.Data.Validations?.ValidationMessages ?? "Data validation failed.";
+                        return new ApiResponse { Message = $"NIN details found but validation failed: {messages}", Status = 400 };
+                    }
+
                     customer.Nin = request.Nin;
                     customer.Ninverified = true;
                     customer.NinverifiedAt = DateTime.UtcNow;
@@ -364,13 +401,13 @@ namespace DogoFinance.CustomerManagement.Services
 
                     await _uow.Customers.SaveCustomer(customer);
 
-                    return new ApiResponse { Success = true, Message = "NIN verified successfully", Boolean = true };
+                    return new ApiResponse { Success = true, Message = "NIN verified successfully", Boolean = true, Data = youVerifyResponse.Data };
                 }
 
-                return new ApiResponse { Message = "NIN identity mismatch.", Status = 400 };
+                return new ApiResponse { Message = "NIN not found or invalid.", Status = 400 };
             }
 
-            return new ApiResponse { Message = monnifyResponse?.responseMessage ?? "NIN verification failed", Status = 400 };
+            return new ApiResponse { Message = youVerifyResponse?.Message ?? "NIN verification failed", Status = 400 };
         }
 
         public async Task<ApiResponse> GetProfile(long userId)

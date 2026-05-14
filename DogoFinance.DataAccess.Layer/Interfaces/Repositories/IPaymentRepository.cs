@@ -6,5 +6,6 @@ namespace DogoFinance.DataAccess.Layer.Interfaces.Repositories
     {
         Task<TblPayment?> GetByReference(string reference);
         Task SavePayment(TblPayment payment);
+        Task<TblPayment?> GetByPaymentRef(string paymentRef);
     }
 }

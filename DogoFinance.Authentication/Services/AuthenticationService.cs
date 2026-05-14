@@ -188,7 +188,7 @@ namespace DogoFinance.Authentication.Services
 
             // Send reset email
             var customer = await BaseRepository().FindEntity<TblCustomer>(c => c.UserId == user.UserId);
-            var baseUrl = _configuration["SystemConfig:FrontendBaseUrl"] ?? "https://app.dogofinance.com";
+            var baseUrl = (_configuration["SystemConfig:FrontendBaseUrl"] ?? "https://app.dogofinance.com").Trim().TrimEnd('/');
             var placeholders = new Dictionary<string, string>
             {
                 { "FirstName", customer?.FirstName ?? "DogoFinance User" },

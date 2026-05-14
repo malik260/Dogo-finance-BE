@@ -19,7 +19,7 @@ namespace DogoFinance.DataAccess.Layer.Repositories
         {
             return await BaseRepository().FindEntity<TblCustomer>(x => x.UserId == userId);
         }
-
+        
         public async Task SaveCustomer(TblCustomer customer)
         {
             if (customer.CustomerId == 0)

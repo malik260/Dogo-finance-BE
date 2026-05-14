@@ -80,10 +80,26 @@ namespace DogoFinance.Integration.Services
                 var body = await File.ReadAllTextAsync(templatePath);
 
                 // Replace placeholders
+                //foreach (var placeholder in placeholders)
+                //{
+                //    var value = WebUtility.HtmlEncode(placeholder.Value);
+                //    body = body.Replace($"{{{{{placeholder.Key}}}}}", value);
+                //}
+
                 foreach (var placeholder in placeholders)
                 {
-                    body = body.Replace($"{{{{{placeholder.Key}}}}}", placeholder.Value);
+                    var key = placeholder.Key;
+                    var rawValue = placeholder.Value ?? string.Empty;
+
+                    bool isLink = key.ToLower().Contains("link") || key.ToLower().Contains("url");
+
+                    var value = isLink
+                        ? rawValue
+                        : WebUtility.HtmlEncode(rawValue);
+
+                    body = body.Replace($"{{{{{key}}}}}", value);
                 }
+
 
                 return await SendEmail(to, subject, body);
             }

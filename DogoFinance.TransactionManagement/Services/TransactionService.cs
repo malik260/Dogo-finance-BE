@@ -70,13 +70,13 @@ namespace DogoFinance.TransactionManagement.Services
                 UserId = user.UserId,
                 Amount = amount,
                 PaymentProvider = 1, // Monnify
-                ProviderReference = reference,
+                PaymentReference = reference,
                 Status = "PENDING",
                 CreatedAt = DateTime.UtcNow
             };
             await _uow.Payments.SavePayment(payment);
 
-            var baseUrl = _configuration["SystemConfig:FrontendBaseUrl"] ?? "https://app.dogofinance.com";
+            var baseUrl = (_configuration["SystemConfig:FrontendBaseUrl"] ?? "https://app.dogofinance.com").Trim().TrimEnd('/');
             var monnifyRequest = new InitializeTransactionRequest
             {
                 amount = amount,
@@ -180,70 +180,20 @@ namespace DogoFinance.TransactionManagement.Services
                     return response;
                 }
 
-                await _uow.BeginTransactionAsync();
-                var payment = await _uow.Payments.GetByReference(reference);
-                if (payment == null) { response.SetError("Payment records not found", 404); return response; }
-
-                if (payment.Status == "Completed" || payment.Status == "SUCCESS")
-                {
-                    response.SetMessage("Success", 200);
-                    return response;
-                }
-
-                var customer = await _uow.Customers.GetByUserId(payment.UserId);
-                if (customer == null) throw new Exception("Customer not linked to user");
-
-                var wallet = await _uow.Wallets.GetByCustomerId(customer.CustomerId);
-                if (wallet == null) { response.SetError("Wallet not found", 404); return response; }
-
-                // Credit Wallet
-                wallet.Balance += payment.Amount;
-                await _uow.Wallets.UpdateWallet(wallet);
-
-                // Update Payment
-                payment.Status = "Completed";
-                //payment.ModifiedAt = DateTime.UtcNow;
-                await _uow.Payments.SavePayment(payment);
-
-                // Create Transaction
-                var transaction = new TblTransaction
-                {
-                    Reference = reference,
-                    TransactionType = TransactionType.DEPOSIT,
-                    Amount = payment.Amount,
-                    Status = 1, // SUCCESS
-                    Narration = "Wallet Deposit (Confirmed)",
-                    PaymentId = payment.Id,
-                    InitiatedByUserId = payment.UserId,
-                    CreatedAt = DateTime.UtcNow
-                };
-                await _uow.Transactions.CreateTransaction(transaction);
-
-                // Log Ledger (Sub-ledger)
-                await LogLedger(transaction.TransactionId, wallet.WalletId, EntryType.CREDIT, payment.Amount, wallet.Balance, "Deposit via Card");
-
-                // Post to General Ledger (Double-Entry)
-                await _accountingService.PostJournalAsync(new JournalEntryDto
-                {
-                    Reference = reference,
-                    Narration = $"Wallet Deposit - Customer ID: {customer.CustomerId}",
-                    TransactionDate = DateTime.UtcNow,
-                    Lines = new List<JournalLineDto>
-                    {
-                        new JournalLineDto { AccountCode = "1110", Debit = payment.Amount, Credit = 0, Narration = "Bank Inflow (Monnify)" }, // Dr Bank
-                        new JournalLineDto { AccountCode = "2110", Debit = 0, Credit = payment.Amount, Narration = "Customer Wallet Liability" } // Cr Wallet
-                    }
-                });
-
-                await _uow.CommitAsync();
-                response.SetMessage("Wallet credited successfully", 200);
+                // Call the consolidated processing logic
+                return await ProcessDepositCredit(
+                    reference: reference,
+                    amount: monnifyVerify.ResponseBody.AmountPaid,
+                    method: monnifyVerify.ResponseBody.PaymentMethod,
+                    provider: "Monnify"
+                );
             }
             catch (Exception ex)
             {
-                await _uow.RollbackAsync();
+                _logger.LogError(ex, "ConfirmDeposit Error for {Ref}", reference);
                 response.SetError(ex.Message, 500);
+                return response;
             }
-            return response;
         }
 
         public async Task<ApiResponse> CreateVirtualAccount(long userId)
@@ -373,91 +323,169 @@ namespace DogoFinance.TransactionManagement.Services
                 return response;
             }
         }
-
         private async Task<ApiResponse> HandleDepositWebhook(WebhookEventData eventData)
         {
-            var response = new ApiResponse();
-            // Check duplicate
-            var existingPayment = await _uow.Payments.GetByReference(eventData.paymentReference);
-            if (existingPayment != null && (existingPayment.Status == "Completed" || existingPayment.Status == "SUCCESS"))
+            try
             {
-                response.Status = 200;
-                return response;
+                // 1. Only process successful payments
+                if (eventData.paymentStatus != "PAID")
+                    return new ApiResponse { Status = 200, Message = "Ignored: Status not PAID" };
+
+                // 2. Call the consolidated logic
+                // We use paymentReference (Monnify Trans Ref) as the primary key for credit
+                return await ProcessDepositCredit(
+                    reference: eventData.paymentReference,
+                    amount: eventData.amountPaid,
+                    method: eventData.paymentMethod,
+                    provider: "Monnify (Webhook)",
+                    customerEmail: eventData.customer?.email,
+                    accountReference: eventData.accountReference
+                );
             }
-
-            var reservedAcc = await _uow.ReservedAccounts.GetByAccountReference(eventData.accountReference);
-            if (reservedAcc == null)
+            catch (Exception ex)
             {
-                response.SetError("Reserved account not found", 404);
-                return response;
+                _logger.LogError(ex, "Webhook Deposit Error");
+                return new ApiResponse { Status = 200, Message = "Error logged" }; 
             }
-
-            var customer = await _uow.Customers.GetByUserId(reservedAcc.UserId);
-            if (customer == null) { response.SetError("Customer records missing", 404); return response; }
-
-            var wallet = await _uow.Wallets.GetByCustomerId(customer.CustomerId);
-            if (wallet == null) { response.SetError("Wallet not found", 404); return response; }
-
-            await _uow.BeginTransactionAsync();
-
-            // Credit Wallet
-            wallet.Balance += eventData.amountPaid;
-            await _uow.Wallets.UpdateWallet(wallet);
-
-            // Create or update payment log
-            if (existingPayment == null)
-            {
-                existingPayment = new TblPayment
-                {
-                    UserId = customer.UserId,
-                    Amount = eventData.amountPaid,
-                    ProviderReference = eventData.paymentReference,
-                    Status = "Completed",
-                    CreatedAt = DateTime.UtcNow
-                };
-                await _uow.Payments.SavePayment(existingPayment);
-            }
-            else
-            {
-                existingPayment.Status = "Completed";
-                await _uow.Payments.SavePayment(existingPayment);
-            }
-
-            // Create Transaction
-            var transaction = new TblTransaction
-            {
-                Reference = eventData.paymentReference,
-                TransactionType = TransactionType.DEPOSIT,
-                Amount = eventData.amountPaid,
-                Status = 1, // SUCCESS
-                Narration = "Transfer Deposit Received",
-                PaymentId = existingPayment.Id,
-                InitiatedByUserId = customer.UserId,
-                CreatedAt = DateTime.UtcNow
-            };
-            await _uow.Transactions.CreateTransaction(transaction);
-
-            // Ledger Entry (Sub-ledger)
-            await LogLedger(transaction.TransactionId, wallet.WalletId, EntryType.CREDIT, eventData.amountPaid, wallet.Balance, "Bank Transfer Deposit");
-
-            // Post to General Ledger (Double-Entry)
-            await _accountingService.PostJournalAsync(new JournalEntryDto
-            {
-                Reference = eventData.paymentReference,
-                Narration = $"Transfer Deposit - Customer ID: {customer.CustomerId}",
-                TransactionDate = DateTime.UtcNow,
-                Lines = new List<JournalLineDto>
-                {
-                    new JournalLineDto { AccountCode = "1110", Debit = eventData.amountPaid, Credit = 0, Narration = "Bank Inflow (Transfer)" }, // Dr Bank
-                    new JournalLineDto { AccountCode = "2110", Debit = 0, Credit = eventData.amountPaid, Narration = "Customer Wallet Liability" } // Cr Wallet
-                }
-            });
-
-            await _uow.CommitAsync();
-            response.SetMessage("Deposit processed", 200);
-            return response;
         }
 
+        /// <summary>
+        /// Consolidated logic for crediting a customer's wallet after a successful deposit.
+        /// Handles idempotency (no double-credit) and atomic updates across all financial tables.
+        /// </summary>
+        private async Task<ApiResponse> ProcessDepositCredit(string reference, decimal amount, string method, string provider, string? customerEmail = null, string? accountReference = null)
+        {
+            var response = new ApiResponse();
+            
+            // We use a global lock or rely on the DB transaction for race conditions.
+            // Since this is likely a single-node web app, we can use a simple DB transaction + status check.
+            await _uow.BeginTransactionAsync();
+
+            try
+            {
+                // 1. Idempotency Check: Check if this payment is already processed
+                // We check by ProviderReference (Monnify's Ref)
+                var payment = await _uow.Payments.GetByPaymentRef(reference);
+                
+                // Fallback: If not found by PaymentRef, check by ProviderReference
+                if (payment == null) payment = await _uow.Payments.GetByReference(reference);
+
+                if (payment != null && (payment.Status == "Completed" || payment.Status == "SUCCESS"))
+                {
+                    await _uow.RollbackAsync(); // Release transaction
+                    return new ApiResponse { Status = 200, Message = "Already processed" };
+                }
+
+                // 2. Find the Customer
+                TblCustomer? customer = null;
+                if (payment != null)
+                {
+                    customer = await _uow.Customers.GetByUserId(payment.UserId);
+                }
+                else
+                {
+                    // If no payment record exists (e.g., Transfer to Reserved Account), find customer by other means
+                    if (!string.IsNullOrEmpty(accountReference))
+                    {
+                        var reservedAcc = await _uow.ReservedAccounts.GetByAccountReference(accountReference);
+                        if (reservedAcc != null) customer = await _uow.Customers.GetByUserId(reservedAcc.UserId);
+                    }
+                    
+                    if (customer == null && !string.IsNullOrEmpty(customerEmail))
+                    {
+                        var user = await _uow.Users.GetByEmail(customerEmail);
+                        if (user != null) customer = await _uow.Customers.GetByUserId(user.UserId);
+                    }
+                }
+
+                if (customer == null)
+                {
+                    await _uow.RollbackAsync();
+                    _logger.LogWarning("Deposit Credit Failed: Customer not found for Reference {Ref}", reference);
+                    return new ApiResponse { Status = 200, Message = "Customer not found" };
+                }
+
+                // 3. Find/Create Wallet
+                var wallet = await _uow.Wallets.GetByCustomerId(customer.CustomerId);
+                if (wallet == null)
+                {
+                    await _uow.RollbackAsync();
+                    return new ApiResponse { Status = 404, Message = "Wallet not found" };
+                }
+
+                // 4. Update/Create Payment Record
+                if (payment == null)
+                {
+                    payment = new TblPayment
+                    {
+                        UserId = customer.UserId,
+                        Amount = amount,
+                        PaymentProvider = 1, // Monnify
+                        ProviderReference = reference,
+                        PaymentReference = reference,
+                        Status = "Completed",
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _uow.Payments.SavePayment(payment);
+                }
+                else
+                {
+                    payment.Status = "Completed";
+                    payment.ProviderReference = reference;
+                    await _uow.Payments.SavePayment(payment);
+                }
+
+                // 5. Update Wallet Balance
+                wallet.Balance += amount;
+                await _uow.Wallets.UpdateWallet(wallet);
+
+                // 6. Create Transaction Log
+                var transaction = new TblTransaction
+                {
+                    Reference = reference,
+                    TransactionType = TransactionType.DEPOSIT,
+                    Amount = amount,
+                    Status = 1, // SUCCESS
+                    Narration = $"Deposit via {method} ({provider})",
+                    PaymentId = payment.Id,
+                    InitiatedByUserId = customer.UserId,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _uow.Transactions.CreateTransaction(transaction);
+
+                // 7. Log Ledger (Sub-ledger for Wallet History)
+                await LogLedger(
+                    transaction.TransactionId,
+                    wallet.WalletId,
+                    EntryType.CREDIT,
+                    amount,
+                    wallet.Balance,
+                    $"Deposit ({method})"
+                );
+
+                // 8. Post to General Ledger (Double-Entry Bookkeeping)
+                await _accountingService.PostJournalAsync(new JournalEntryDto
+                {
+                    Reference = reference,
+                    Narration = $"Wallet Deposit - Customer ID: {customer.CustomerId}",
+                    TransactionDate = DateTime.UtcNow,
+                    Lines = new List<JournalLineDto>
+                    {
+                        new JournalLineDto { AccountCode = "1110", Debit = amount, Credit = 0, Narration = "Bank Inflow" }, // Dr Bank
+                        new JournalLineDto { AccountCode = "2110", Debit = 0, Credit = amount, Narration = "Customer Wallet Liability" } // Cr Wallet
+                    }
+                });
+
+                await _uow.CommitAsync();
+                return new ApiResponse { Success = true, Message = "Wallet credited successfully", Status = 200 };
+            }
+            catch (Exception ex)
+            {
+                await _uow.RollbackAsync();
+                _logger.LogError(ex, "ProcessDepositCredit CRITICAL ERROR for {Ref}", reference);
+                throw; // Rethrow to let caller handle
+            }
+        }
         private async Task<ApiResponse> HandleDisbursementWebhook(WebhookEventData eventData)
         {
             var response = new ApiResponse();

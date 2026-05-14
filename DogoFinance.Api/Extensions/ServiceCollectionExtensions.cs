@@ -44,6 +44,7 @@ namespace DogoFinance.Api.Extensions
 
             // Register Monnify & Integration
             services.AddHttpClient<IMonnifyService, MonnifyService>();
+            services.AddHttpClient<IYouVerifyService, YouVerifyService>();
             services.AddScoped<ICloudinaryService, CloudinaryService>();
             services.AddScoped<IDocumentProcessingService, DocumentProcessingService>();
 
