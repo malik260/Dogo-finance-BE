@@ -124,10 +124,14 @@ namespace DogoFinance.CustomerManagement.Services
                 var verificationLink = $"{baseUrl}/verify-email?email={Uri.EscapeDataString(user.Email.Trim())}" +
                                         $"&code={Uri.EscapeDataString(verificationCode)}";
 
+                var apiBaseUrl = (_configuration["SystemConfig:ApiBaseUrl"] ?? "https://localhost:7168").Trim().TrimEnd('/');
+                var logoUrl = $"{apiBaseUrl}/Images/DOGO.jpg.webp";
+
                 var emailPlaceholders = new Dictionary<string, string>
                 {
                     { "FirstName", request.FirstName },
-                    { "VerificationLink", verificationLink }
+                    { "VerificationLink", verificationLink },
+                    { "LogoUrl", "cid:logo" }
                 };
 
                 var emailSent = await _emailService.SendTemplateEmail(
@@ -201,10 +205,14 @@ namespace DogoFinance.CustomerManagement.Services
             var baseUrl = (_configuration["SystemConfig:FrontendBaseUrl"] ?? "http://localhost:4200").Trim().TrimEnd('/');
             var verificationLink = $"{baseUrl}/verify-email?email={Uri.EscapeDataString(user.Email.Trim())}&code={verificationCode}";
 
+            var apiBaseUrl = (_configuration["SystemConfig:ApiBaseUrl"] ?? "https://localhost:7168").Trim().TrimEnd('/');
+            var logoUrl = $"{apiBaseUrl}/Images/DOGO.jpg.webp";
+
             var emailPlaceholders = new Dictionary<string, string>
             {
                 { "FirstName", firstName },
-                { "VerificationLink", verificationLink }
+                { "VerificationLink", verificationLink },
+                { "LogoUrl", "cid:logo" }
             };
 
             var emailSent = await _emailService.SendTemplateEmail(

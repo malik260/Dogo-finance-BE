@@ -4,6 +4,8 @@ using DogoFinance.Integration.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Hosting;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace DogoFinance.Integration.Services
 {
@@ -20,7 +22,7 @@ namespace DogoFinance.Integration.Services
             _env = env;
         }
 
-        public async Task<bool> SendEmail(string to, string subject, string body)
+        public async Task<bool> SendEmail(string to, string subject, string body, IEnumerable<LinkedResource>? resources = null)
         {
             try
             {
@@ -39,6 +41,17 @@ namespace DogoFinance.Integration.Services
                     Body = body,
                     IsBodyHtml = true
                 };
+
+                if (resources != null && resources.Any())
+                {
+                    var alternateView = AlternateView.CreateAlternateViewFromString(body, null, "text/html");
+                    foreach (var resource in resources)
+                    {
+                        alternateView.LinkedResources.Add(resource);
+                    }
+                    mail.AlternateViews.Add(alternateView);
+                }
+
                 mail.To.Add(to);
 
                 using var smtpClient = new SmtpClient(smtpServer, port);
@@ -100,8 +113,35 @@ namespace DogoFinance.Integration.Services
                     body = body.Replace($"{{{{{key}}}}}", value);
                 }
 
+                if (body.Contains("{{LogoUrl}}"))
+                {
+                    body = body.Replace("{{LogoUrl}}", "cid:logo");
+                }
 
-                return await SendEmail(to, subject, body);
+                var resources = new List<LinkedResource>();
+                
+                // If the body contains cid:logo, try to attach the logo
+                if (body.Contains("cid:logo"))
+                {
+                    var logoPath = Path.Combine(_env.ContentRootPath, "Images", "DOGO.jpg.webp");
+                    if (!File.Exists(logoPath))
+                    {
+                        // Try fallback path
+                        logoPath = Path.Combine(_env.ContentRootPath, "..", "DogoFinance.Api", "Images", "DOGO.jpg.webp");
+                    }
+
+                    if (File.Exists(logoPath))
+                    {
+                        var logoResource = new LinkedResource(logoPath, "image/webp") { ContentId = "logo" };
+                        resources.Add(logoResource);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Logo for CID embedding not found at {Path}", logoPath);
+                    }
+                }
+
+                return await SendEmail(to, subject, body, resources);
             }
             catch (Exception ex)
             {
