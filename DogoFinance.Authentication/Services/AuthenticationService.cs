@@ -125,6 +125,7 @@ namespace DogoFinance.Authentication.Services
                     Permissions = permissions,
                     FirstName = customer?.FirstName ?? user.FirstName ?? "Dogo",
                     LastName = customer?.LastName ?? user.LastName ?? "User",
+                    user.PhoneNumber,
                     UserId = user.UserId,
                     CustomerId = customer?.CustomerId ?? 0,
                     SessionId = session.SessionId,

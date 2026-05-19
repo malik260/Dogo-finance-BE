@@ -5,12 +5,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using DogoFinance.DataAccess.Layer.Models.Entities;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace DogoFinance.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "SuperAdmin,Admin")]
+    [Authorize]
+    [AdminOnly]
     public class AdminController : ControllerBase
     {
         private readonly IAdminService _adminService;
@@ -169,5 +171,30 @@ namespace DogoFinance.Api.Controllers
     {
         public SignUpRequest UserData { get; set; } = null!;
         public int RoleId { get; set; } // 1 for SuperAdmin, 2 for Admin
+    }
+
+    public class AdminOnlyAttribute : ActionFilterAttribute
+    {
+        public override void OnActionExecuting(ActionExecutingContext context)
+        {
+            var role = context.HttpContext.User.FindFirstValue(ClaimTypes.Role);
+            var isStaff = !string.IsNullOrEmpty(role) && 
+                           !role.Equals("Customer", StringComparison.OrdinalIgnoreCase) && 
+                           !role.Equals("User", StringComparison.OrdinalIgnoreCase);
+
+            if (!isStaff)
+            {
+                context.Result = new ObjectResult(new ApiResponse 
+                { 
+                    Message = "Access denied: Administrative privileges required.", 
+                    Status = 403 
+                }) 
+                { 
+                    StatusCode = 403 
+                };
+                return;
+            }
+            base.OnActionExecuting(context);
+        }
     }
 }

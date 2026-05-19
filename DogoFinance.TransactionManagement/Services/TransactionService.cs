@@ -56,56 +56,64 @@ namespace DogoFinance.TransactionManagement.Services
 
         public async Task<ApiResponse> InitiateDeposit(long customerId, decimal amount)
         {
-            var response = new ApiResponse();
-            var customer = await BaseRepository().FindEntity<TblCustomer>(customerId);
-            if (customer == null) return new ApiResponse { Message = "Customer not found", Status = 404 };
-
-            var user = await BaseRepository().FindEntity<TblUser>(customer.UserId);
-            if (user == null) return new ApiResponse { Message = "User account not found", Status = 404 };
-
-            var reference = $"DEP_{DateTime.UtcNow.Ticks}";
-
-            var payment = new TblPayment
+            try
             {
-                UserId = user.UserId,
-                Amount = amount,
-                PaymentProvider = 1, // Monnify
-                PaymentReference = reference,
-                Status = "PENDING",
-                CreatedAt = DateTime.UtcNow
-            };
-            await _uow.Payments.SavePayment(payment);
+                var response = new ApiResponse();
+                var customer = await BaseRepository().FindEntity<TblCustomer>(customerId);
+                if (customer == null) return new ApiResponse { Message = "Customer not found", Status = 404 };
 
-            var baseUrl = (_configuration["SystemConfig:FrontendBaseUrl"] ?? "https://app.dogofinance.com").Trim().TrimEnd('/');
-            var monnifyRequest = new InitializeTransactionRequest
-            {
-                amount = amount,
-                customerName = $"{customer.FirstName} {customer.LastName}",
-                customerEmail = user.Email,
-                paymentReference = reference,
-                paymentDescription = "Wallet Deposit",
-                redirectUrl = $"{baseUrl}/deposit-success"
-            };
+                var user = await BaseRepository().FindEntity<TblUser>(customer.UserId);
+                if (user == null) return new ApiResponse { Message = "User account not found", Status = 404 };
 
-            var monnifyResult = await _monnifyService.InitializeTransaction(monnifyRequest);
+                var reference = $"DEP_{DateTime.UtcNow.Ticks}";
 
-            if (monnifyResult != null && monnifyResult.RequestSuccessful)
-            {
-                string transref = monnifyResult.ResponseBody.TransactionReference;
-                response.SetMessage("Payment initialized", true, new { monnifyResult.ResponseBody.CheckoutUrl, reference, transref });
-
-                payment.ProviderReference = transref;
+                var payment = new TblPayment
+                {
+                    UserId = user.UserId,
+                    Amount = amount,
+                    PaymentProvider = 1, // Monnify
+                    PaymentReference = reference,
+                    Status = "PENDING",
+                    CreatedAt = DateTime.UtcNow
+                };
                 await _uow.Payments.SavePayment(payment);
-            }
-            else
-            {
-                payment.Status = "FAILED";
-                await _uow.Payments.SavePayment(payment);
-                response.SetError("Payment initiation failed at Monnify", 400);
-            }
 
-            return response;
-        }
+                var baseUrl = (_configuration["SystemConfig:FrontendBaseUrl"] ?? "https://app.dogofinance.com").Trim().TrimEnd('/');
+                var monnifyRequest = new InitializeTransactionRequest
+                {
+                    amount = amount,
+                    customerName = $"{customer.FirstName} {customer.LastName}",
+                    customerEmail = user.Email,
+                    paymentReference = reference,
+                    paymentDescription = "Wallet Deposit",
+                    redirectUrl = $"{baseUrl}/deposit-success"
+                };
+
+                var monnifyResult = await _monnifyService.InitializeTransaction(monnifyRequest);
+
+                if (monnifyResult != null && monnifyResult.RequestSuccessful)
+                {
+                    string transref = monnifyResult.ResponseBody.TransactionReference;
+                    response.SetMessage("Payment initialized", true, new { monnifyResult.ResponseBody.CheckoutUrl, reference, transref });
+
+                    payment.ProviderReference = transref;
+                    await _uow.Payments.SavePayment(payment);
+                }
+                else
+                {
+                    payment.Status = "FAILED";
+                    await _uow.Payments.SavePayment(payment);
+                    response.SetError("Payment initiation failed at Monnify", 400);
+                }
+
+                return response;
+
+            }
+            catch (Exception ex)
+            {
+
+                throw;
+            }        }
 
         public async Task<ApiResponse> ChargeCard(MonnifyChargeRequest request)
         {

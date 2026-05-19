@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using DogoFinance.Integration.Interfaces;
 using DogoFinance.Integration.Models.Monnify;
 using DogoFinance.DataAccess.Layer.Models.Constants;
+using Microsoft.Extensions.Configuration;
 
 namespace DogoFinance.AdminManagement.Services
 {
@@ -18,12 +19,16 @@ namespace DogoFinance.AdminManagement.Services
         private readonly IUnitOfWork _uow;
         private readonly ILogger<AdminService> _logger;
         private readonly IMonnifyService _monnifyService;
+        private readonly IEmailService _emailService;
+        private readonly IConfiguration _configuration;
 
-        public AdminService(IUnitOfWork uow, ILogger<AdminService> logger, IMonnifyService monnifyService)
+        public AdminService(IUnitOfWork uow, ILogger<AdminService> logger, IMonnifyService monnifyService, IEmailService emailService, IConfiguration configuration)
         {
             _uow = uow;
             _logger = logger;
             _monnifyService = monnifyService;
+            _emailService = emailService;
+            _configuration = configuration;
             
             // Ensure child repositories share the same DB context for transaction safety
             SetSharedRepository(_uow.GenericRepository);
@@ -58,8 +63,8 @@ namespace DogoFinance.AdminManagement.Services
                     return response;
                 }
 
-                var defaultPassword = "StaffPass1234!"; // As requested by USER
-                var (hash, salt) = HashHelper.CreateHash(string.IsNullOrWhiteSpace(request.Password) ? defaultPassword : request.Password);
+                var plainPassword = string.IsNullOrWhiteSpace(request.Password) ? "StaffPass1234!" : request.Password;
+                var (hash, salt) = HashHelper.CreateHash(plainPassword);
 
                 var user = new TblUser
                 {
@@ -88,6 +93,27 @@ namespace DogoFinance.AdminManagement.Services
                 await BaseRepository().Insert(userRole);
 
                 await BaseRepository().CommitTrans();
+
+                // Send welcome email with credentials - fail-safe to not break transaction
+                try
+                {
+                    var baseUrl = (_configuration["SystemConfig:FrontendBaseUrl"] ?? "https://app.dogofinance.com").Trim().TrimEnd('/');
+                    var placeholders = new Dictionary<string, string>
+                    {
+                        { "FirstName", user.FirstName ?? "Staff" },
+                        { "LastName", user.LastName ?? "Member" },
+                        { "Email", user.Email },
+                        { "Password", plainPassword },
+                        { "LoginLink", $"{baseUrl}/admin/login" }
+                    };
+
+                    await _emailService.SendTemplateEmail(user.Email, "Welcome to the DogoFinance Admin Team", "AdminCreated", placeholders);
+                }
+                catch (Exception mailEx)
+                {
+                    _logger.LogError(mailEx, "Failed to send welcome email to newly created admin: {Email}", user.Email);
+                }
+
                 response.SetMessage("Admin user created successfully", true);
                 return response;
             }

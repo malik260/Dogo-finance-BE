@@ -52,47 +52,6 @@ namespace DogoFinance.TransactionManagement.Services
                 var user = await _uow.Users.GetById(customer.UserId);
                 if (user == null) { response.SetError("User account not found", 404); return response; }
 
-                // 2. Security Check: Transaction PIN
-                if (!user.IsPinSet)
-                {
-                    response.SetError("Transaction PIN not setup. Please set it in security settings.", 403);
-                    return response;
-                }
-
-                if (string.IsNullOrEmpty(pin))
-                {
-                    response.SetError("PIN_REQUIRED", 403);
-                    return response;
-                }
-
-                if (!HashHelper.VerifyHash(pin, user.TransactionPinHash!, user.TransactionPinSalt!))
-                {
-                    response.SetError("Incorrect transaction PIN.", 401);
-                    return response;
-                }
-
-                // 3. Security Check: 2FA OTP (if enabled)
-                if (user.Is2faEnabled == true)
-                {
-                    if (string.IsNullOrEmpty(otp))
-                    {
-                        // Generate and Send OTP
-                        await SendSecurityOtp(user, customer.FirstName ?? "Investor");
-                        response.SetError("OTP_REQUIRED", 403);
-                        return response;
-                    }
-
-                    if (user.VerificationCode != otp || user.VerificationExpiry < DateTime.UtcNow)
-                    {
-                        response.SetError("Invalid or expired OTP code.", 401);
-                        return response;
-                    }
-
-                    // Clear OTP after use
-                    user.VerificationCode = null;
-                    user.VerificationExpiry = null;
-                    await _uow.Users.SaveUser(user);
-                }
 
                 var portfolio = await _uow.Portfolios.GetPortfolioById(portfolioId);
                 if (portfolio == null)
@@ -305,7 +264,17 @@ namespace DogoFinance.TransactionManagement.Services
                     var daysHeldTotal = (DateTime.UtcNow - oldestInvestment.CreatedAt).TotalDays;
                     if (daysHeldTotal < portfolio.MinHoldingPeriodDays)
                     {
-                        exitFee = Math.Round(amount * (portfolio.ExitFeePercentage / 100m), 2);
+                        if (currentValue > 0)
+                        {
+                            decimal ratio = amount / currentValue;
+                            decimal capitalPortion = userPortfolio.InvestedAmount * ratio;
+                            decimal profitPortion = amount - capitalPortion;
+
+                            if (profitPortion > 0)
+                            {
+                                exitFee = Math.Round(profitPortion * (portfolio.ExitFeePercentage / 100m), 2);
+                            }
+                        }
                     }
                 }
                 decimal netAmount = amount - exitFee;
