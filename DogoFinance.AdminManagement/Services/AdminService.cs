@@ -468,6 +468,60 @@ namespace DogoFinance.AdminManagement.Services
             }
         }
 
+        public async Task<ApiResponse> GetCompanyProfile()
+        {
+            var profile = await BaseRepository().AsQueryable<TblCompanyProfile>(p => true).FirstOrDefaultAsync();
+            if (profile == null)
+            {
+                profile = new TblCompanyProfile
+                {
+                    CompanyName = "Dogo Finance",
+                    Address = "123 Finance Street, Lagos, Nigeria",
+                    PhoneNumber = "+234 800 000 0000",
+                    Email = "info@dogofinance.com",
+                    RcNumber = "RC-1234567",
+                    DateOfIncorporation = new DateTime(2020, 1, 1),
+                    CreatedAt = DateTime.UtcNow
+                };
+                await BaseRepository().Insert(profile);
+            }
+            return new ApiResponse { Success = true, Data = profile, Message = "Company profile retrieved successfully" };
+        }
+
+        public async Task<ApiResponse> UpdateCompanyProfile(TblCompanyProfile profile)
+        {
+            try
+            {
+                var existing = await BaseRepository().AsQueryable<TblCompanyProfile>(p => true).FirstOrDefaultAsync();
+                if (existing != null)
+                {
+                    existing.CompanyName = profile.CompanyName;
+                    existing.Address = profile.Address;
+                    existing.PhoneNumber = profile.PhoneNumber;
+                    existing.Email = profile.Email;
+                    existing.RcNumber = profile.RcNumber;
+                    existing.DateOfIncorporation = profile.DateOfIncorporation;
+                    existing.BankId = profile.BankId;
+                    existing.AccountNumber = profile.AccountNumber;
+                    existing.XLink = profile.XLink;
+                    existing.FacebookLink = profile.FacebookLink;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                    await BaseRepository().Update(existing);
+                }
+                else
+                {
+                    profile.CreatedAt = DateTime.UtcNow;
+                    await BaseRepository().Insert(profile);
+                }
+                return new ApiResponse { Success = true, Message = "Company profile updated successfully" };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "UpdateCompanyProfile failed");
+                return new ApiResponse { Message = "Failed to update company profile", Status = 500 };
+            }
+        }
+
         public async Task<ApiResponse> ListWithdrawalRequests(string? status)
         {
             var query = BaseRepository().AsQueryable<TblWithdrawalRequest>(r => true)
@@ -669,6 +723,96 @@ namespace DogoFinance.AdminManagement.Services
             {
                 await BaseRepository().RollbackTrans();
                 _logger.LogError(ex, "ReviewLiquidationRequest failed");
+                return new ApiResponse { Message = ex.Message, Status = 500 };
+            }
+        }
+
+        public async Task<ApiResponse> ListManualFundingRequests(string? status)
+        {
+            var query = BaseRepository().AsQueryable<TblManualFundingRequest>(r => true)
+                .Include(r => r.Customer)
+                .ThenInclude(c => c.User)
+                .OrderByDescending(r => r.InitiatedAt);
+
+            if (!string.IsNullOrEmpty(status))
+            {
+                query = (IOrderedQueryable<TblManualFundingRequest>)query.Where(r => r.Status == status);
+            }
+
+            var requests = await query.ToListAsync();
+
+            var result = requests.Select(r => new
+            {
+                r.Id,
+                CustomerName = r.Customer.FirstName + " " + r.Customer.LastName,
+                Email = r.Customer.User?.Email ?? "N/A",
+                r.Amount,
+                r.Status,
+                r.Reference,
+                r.ReceiptPath,
+                InitiatedAt = r.InitiatedAt.ToString("yyyy-MM-dd HH:mm"),
+                r.AdminNotes
+            }).ToList();
+
+            return new ApiResponse { Success = true, Data = result, Message = "Manual funding requests retrieved" };
+        }
+
+        public async Task<ApiResponse> ReviewManualFundingRequest(AdminManualFundingReviewRequest request, long adminUserId)
+        {
+            var db = await BaseRepository().BeginTrans();
+            try
+            {
+                var fundingReq = await BaseRepository().FindEntity<TblManualFundingRequest>(r => r.Id == request.RequestId);
+                if (fundingReq == null) return new ApiResponse { Message = "Request not found", Status = 404 };
+                if (fundingReq.Status != "Pending") return new ApiResponse { Message = "Request has already been processed", Status = 400 };
+
+                bool isApproved = request.Status == "Approved";
+
+                fundingReq.Status = isApproved ? "Approved" : "Rejected";
+                fundingReq.AdminNotes = request.AdminNotes;
+                fundingReq.ReviewedAt = DateTime.UtcNow;
+                fundingReq.ReviewedByAdminId = adminUserId;
+
+                await BaseRepository().Update(fundingReq);
+
+                if (isApproved)
+                {
+                    // Credit Wallet
+                    var wallet = await _uow.Wallets.GetByCustomerId(fundingReq.CustomerId);
+                    if (wallet == null)
+                    {
+                        // Some users might not have a wallet yet? Let's check or create.
+                        // For simplicity, we assume they have one created at signup.
+                        throw new Exception("Wallet not found for customer.");
+                    }
+
+                    wallet.Balance += fundingReq.Amount;
+                    await _uow.Wallets.UpdateWallet(wallet);
+
+                    // Create Transaction Record
+                    var mainTransaction = new TblTransaction
+                    {
+                        Reference = fundingReq.Reference,
+                        TransactionType = TransactionType.DEPOSIT,
+                        Amount = fundingReq.Amount,
+                        Status = 1, // SUCCESS
+                        Narration = "Manual Bank Transfer Funding (Approved)",
+                        InitiatedByUserId = (await BaseRepository().FindEntity<TblCustomer>(fundingReq.CustomerId))?.UserId ?? 0,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _uow.Transactions.CreateTransaction(mainTransaction);
+
+                    // Log to Ledger
+                    await LogLedger(mainTransaction.TransactionId, wallet.WalletId, EntryType.CREDIT, fundingReq.Amount, wallet.Balance, "Manual Funding Approved");
+                }
+
+                await BaseRepository().CommitTrans();
+                return new ApiResponse { Success = true, Message = $"Manual funding request { (isApproved ? "Approved" : "Rejected") } successfully" };
+            }
+            catch (Exception ex)
+            {
+                await BaseRepository().RollbackTrans();
+                _logger.LogError(ex, "ReviewManualFundingRequest failed");
                 return new ApiResponse { Message = ex.Message, Status = 500 };
             }
         }

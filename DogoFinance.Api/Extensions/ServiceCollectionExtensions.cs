@@ -15,6 +15,8 @@ using DogoFinance.DataAccess.Layer.Interfaces;
 using DogoFinance.DataAccess.Layer.Repositories.Base;
 using DogoFinance.AccountingManagement.Interfaces;
 using DogoFinance.AccountingManagement.Services;
+using DogoFinance.ReportManagement.Interfaces;
+using DogoFinance.ReportManagement.Services;
 using DogoFinance.DataAccess.Layer;
 using DogoFinance.DataAccess.Layer.Global;
 
@@ -63,6 +65,9 @@ namespace DogoFinance.Api.Extensions
             services.AddScoped<IPortfolioInstrumentService, PortfolioInstrumentService>();
             services.AddScoped<IPortfolioAllocationRuleService, PortfolioAllocationRuleService>();
             services.AddScoped<IInstrumentPriceService, InstrumentPriceService>();
+
+            // Register Report Services
+            services.AddScoped<ICustomerReportService, CustomerReportService>();
 
             // Register individual repositories if needed (Fintrak often does both)
             // services.AddScoped<IAccountRepository, AccountRepository>();

@@ -586,5 +586,38 @@ namespace DogoFinance.CustomerManagement.Services
             if (status == "approved") return "verified";
             return status;
         }
+
+        public async Task<ApiResponse> GetCompanyBankDetails()
+        {
+            try
+            {
+                var profile = await BaseRepository().FindEntity<TblCompanyProfile>(_ => true);
+                if (profile == null) return new ApiResponse { Message = "Company profile not found", Status = 404 };
+
+                string bankName = "Unknown Bank";
+                if (profile.BankId.HasValue)
+                {
+                    var bank = await BaseRepository().FindEntity<TblBank>(b => b.BankId == profile.BankId.Value);
+                    if (bank != null)
+                    {
+                        bankName = bank.BankName;
+                    }
+                }
+
+                var data = new
+                {
+                    AccountName = profile.CompanyName,
+                    AccountNumber = profile.AccountNumber,
+                    BankName = bankName
+                };
+
+                return new ApiResponse { Success = true, Boolean = true, Data = data, Message = "Bank details retrieved successfully" };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving company bank details");
+                return new ApiResponse { Message = "Error retrieving company bank details", Status = 500 };
+            }
+        }
     }
 }

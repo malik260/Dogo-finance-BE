@@ -26,6 +26,7 @@
     <ProjectReference Include="..\DogoFinance.DataAccess.Layer\DogoFinance.DataAccess.Layer.csproj" />
     <ProjectReference Include="..\DogoFinance.ProductManagement\DogoFinance.ProductManagement.csproj" />
     <ProjectReference Include="..\DogoFinance.AccountingManagement\DogoFinance.AccountingManagement.csproj" />
+    <ProjectReference Include="..\DogoFinance.ReportManagement\DogoFinance.ReportManagement.csproj" />
   </ItemGroup>
 
   <ItemGroup>

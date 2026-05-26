@@ -4,6 +4,7 @@ using DogoFinance.DataAccess.Layer.Models.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DogoFinance.DataAccess.Layer.Migrations
 {
     [DbContext(typeof(DogoFinanceContext))]
-    partial class DogoFinanceContextModelSnapshot : ModelSnapshot
+    [Migration("20260525164416_AddCompanyProfileTable")]
+    partial class AddCompanyProfileTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -209,8 +211,9 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<int?>("BankId")
-                        .HasColumnType("int");
+                    b.Property<string>("BankName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
 
                     b.Property<string>("CompanyName")
                         .IsRequired()
@@ -946,60 +949,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.HasIndex("ReviewedByAdminId");
 
                     b.ToTable("TBL_LIQUIDATION_REQUEST");
-                });
-
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblManualFundingRequest", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"), 1L, 1);
-
-                    b.Property<string>("AdminNotes")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<long>("CustomerId")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("InitiatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("(getdate())");
-
-                    b.Property<string>("ReceiptPath")
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.Property<string>("Reference")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long?>("ReviewedByAdminId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)")
-                        .HasDefaultValueSql("('Pending')");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("ReviewedByAdminId");
-
-                    b.ToTable("TBL_MANUAL_FUNDING_REQUEST");
                 });
 
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblModule", b =>
@@ -2095,23 +2044,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.Navigation("Portfolio");
 
                     b.Navigation("ReviewedByAdmin");
-                });
-
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblManualFundingRequest", b =>
-                {
-                    b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblCustomer", "Customer")
-                        .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblUser", "Admin")
-                        .WithMany()
-                        .HasForeignKey("ReviewedByAdminId");
-
-                    b.Navigation("Admin");
-
-                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblNextOfKin", b =>

@@ -130,6 +130,21 @@ namespace DogoFinance.Api.Controllers
             return Ok(response);
         }
 
+        // --- COMPANY PROFILE ---
+        [HttpGet("company-profile")]
+        public async Task<ActionResult<ApiResponse>> GetCompanyProfile()
+        {
+            var response = await _adminService.GetCompanyProfile();
+            return Ok(response);
+        }
+
+        [HttpPut("company-profile")]
+        public async Task<ActionResult<ApiResponse>> UpdateCompanyProfile([FromBody] TblCompanyProfile profile)
+        {
+            var response = await _adminService.UpdateCompanyProfile(profile);
+            return Ok(response);
+        }
+
         // --- WITHDRAWAL MANAGEMENT ---
         [HttpGet("withdrawals")]
         public async Task<ActionResult<ApiResponse>> ListWithdrawals([FromQuery] string? status)
@@ -163,6 +178,24 @@ namespace DogoFinance.Api.Controllers
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
 
             var response = await _adminService.ReviewLiquidationRequest(request, long.Parse(userIdStr));
+            return Ok(response);
+        }
+
+        // --- MANUAL FUNDING MANAGEMENT ---
+        [HttpGet("manual-funding")]
+        public async Task<ActionResult<ApiResponse>> ListManualFundingRequests([FromQuery] string? status)
+        {
+            var response = await _adminService.ListManualFundingRequests(status);
+            return Ok(response);
+        }
+
+        [HttpPost("manual-funding/review")]
+        public async Task<ActionResult<ApiResponse>> ReviewManualFundingRequest([FromBody] AdminManualFundingReviewRequest request)
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
+
+            var response = await _adminService.ReviewManualFundingRequest(request, long.Parse(userIdStr));
             return Ok(response);
         }
     }

@@ -17,5 +17,6 @@ namespace DogoFinance.TransactionManagement.Interfaces
         Task<ApiResponse> GetTransactionHistory(long userId);
         Task<ApiResponse> GetWallet(long customerId);
         Task<ApiResponse> GetFinanceSummary();
+        Task<ApiResponse> SubmitManualFundingRequest(long userId, ManualFundingRequestDto request);
     }
 }

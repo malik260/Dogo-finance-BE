@@ -155,5 +155,13 @@ namespace DogoFinance.Api.Controllers
             var response = await _customerService.GetVerificationStatuses(long.Parse(userIdStr));
             return Ok(response);
         }
+
+        [AllowAnonymous]
+        [HttpGet("company-bank-details")]
+        public async Task<ActionResult<ApiResponse>> GetCompanyBankDetails()
+        {
+            var response = await _customerService.GetCompanyBankDetails();
+            return Ok(response);
+        }
     }
 }

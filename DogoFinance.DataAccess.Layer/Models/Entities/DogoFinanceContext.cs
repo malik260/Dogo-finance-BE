@@ -40,11 +40,13 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public virtual DbSet<TblAccessRight> TblAccessRights { get; set; } = null!;
         public virtual DbSet<TblRoleAccessRight> TblRoleAccessRights { get; set; } = null!;
         public virtual DbSet<TblSystemSetting> TblSystemSettings { get; set; } = null!;
+        public virtual DbSet<TblCompanyProfile> TblCompanyProfiles { get; set; } = null!;
         public virtual DbSet<TblGender> TblGenders { get; set; } = null!;
         public virtual DbSet<TblAddressDocType> TblAddressDocTypes { get; set; } = null!;
         public virtual DbSet<TblCustomerAddressVerification> TblCustomerAddressVerifications { get; set; } = null!;
         public virtual DbSet<TblWithdrawalRequest> TblWithdrawalRequests { get; set; } = null!;
         public virtual DbSet<TblLiquidationRequest> TblLiquidationRequests { get; set; } = null!;
+        public virtual DbSet<TblManualFundingRequest> TblManualFundingRequests { get; set; } = null!;
 
 
         // Portfolio Management
@@ -299,6 +301,12 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
                 entity.Property(e => e.IsActive).HasDefaultValueSql("((1))");
             });
 
+            modelBuilder.Entity<TblCompanyProfile>(entity =>
+            {
+                entity.ToTable("TBL_COMPANY_PROFILE");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            });
+
             // Portfolio Management Configs
             modelBuilder.Entity<TblAssetClass>(entity => {
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
@@ -338,6 +346,11 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
             modelBuilder.Entity<TblLiquidationRequest>(entity => {
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
                 entity.Property(e => e.Status).HasDefaultValueSql("((1))"); // PENDING_APPROVAL
+            });
+
+            modelBuilder.Entity<TblManualFundingRequest>(entity => {
+                entity.Property(e => e.InitiatedAt).HasDefaultValueSql("(getdate())");
+                entity.Property(e => e.Status).HasDefaultValueSql("('Pending')");
             });
 
 

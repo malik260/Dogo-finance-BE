@@ -43,6 +43,16 @@ namespace DogoFinance.Api.Controllers
             return Ok(await _investmentService.InvestAsync(model, long.Parse(userIdStr)));
         }
 
+        [HttpPost("manual-funding")]
+        public async Task<ActionResult<ApiResponse>> SubmitManualFunding([FromBody] ManualFundingRequestDto request)
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
+
+            var response = await _transactionService.SubmitManualFundingRequest(long.Parse(userIdStr), request);
+            return StatusCode(response.Status, response);
+        }
+
         [HttpPost("sell")]
         public async Task<ActionResult<ApiResponse>> Sell([FromBody] SellRequestDto model)
         {

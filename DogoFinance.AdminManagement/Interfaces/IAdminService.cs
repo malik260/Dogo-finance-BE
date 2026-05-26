@@ -29,6 +29,10 @@ namespace DogoFinance.AdminManagement.Interfaces
         Task<ApiResponse> GetSystemSettings();
         Task<ApiResponse> UpdateSystemSettings(TblSystemSetting settings);
 
+        // Company Profile
+        Task<ApiResponse> GetCompanyProfile();
+        Task<ApiResponse> UpdateCompanyProfile(TblCompanyProfile profile);
+
         // Withdrawal Management
         Task<ApiResponse> ListWithdrawalRequests(string? status);
         Task<ApiResponse> ReviewWithdrawalRequest(AdminWithdrawalReviewRequest request, long adminUserId);
@@ -36,6 +40,10 @@ namespace DogoFinance.AdminManagement.Interfaces
         // Liquidation Management
         Task<ApiResponse> ListLiquidationRequests(int? status);
         Task<ApiResponse> ReviewLiquidationRequest(AdminLiquidationReviewRequest request, long adminUserId);
+
+        // Manual Funding Management
+        Task<ApiResponse> ListManualFundingRequests(string? status);
+        Task<ApiResponse> ReviewManualFundingRequest(AdminManualFundingReviewRequest request, long adminUserId);
     }
 
     public class AdminWithdrawalReviewRequest

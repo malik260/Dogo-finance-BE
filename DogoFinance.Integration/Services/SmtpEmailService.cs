@@ -1,11 +1,15 @@
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Mail;
 using DogoFinance.Integration.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Hosting;
-using System.Collections.Generic;
-using System.Linq;
+using DogoFinance.DataAccess.Layer.Repositories.Base;
+using DogoFinance.DataAccess.Layer.Models.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace DogoFinance.Integration.Services
 {
@@ -32,6 +36,16 @@ namespace DogoFinance.Integration.Services
                 var password = _configuration["EmailSettings:Password"];
                 var fromAddress = _configuration["EmailSettings:FromAddress"] ?? "noreply@dogofinance.com";
                 var displayName = _configuration["EmailSettings:DisplayName"] ?? "DogoFinance";
+                try
+                {
+                    using var context = new DogoDbContext();
+                    var profile = await context.Set<TblCompanyProfile>().FirstOrDefaultAsync();
+                    if (profile != null && !string.IsNullOrEmpty(profile.CompanyName))
+                    {
+                        displayName = profile.CompanyName;
+                    }
+                }
+                catch { /* fallback to config if database isn't ready or fails */ }
                 var enableSsl = bool.Parse(_configuration["EmailSettings:EnableSsl"] ?? "true");
 
                 using var mail = new MailMessage
@@ -72,10 +86,48 @@ namespace DogoFinance.Integration.Services
             }
         }
 
+        private async Task InjectCompanyProfilePlaceholders(Dictionary<string, string> placeholders)
+        {
+            try
+            {
+                using var context = new DogoDbContext();
+                var profile = await context.Set<TblCompanyProfile>().FirstOrDefaultAsync();
+                if (profile != null)
+                {
+                    placeholders["CompanyName"] = profile.CompanyName;
+                    placeholders["CompanyAddress"] = profile.Address;
+                    placeholders["CompanyPhone"] = profile.PhoneNumber;
+                    placeholders["CompanyEmail"] = profile.Email;
+                    placeholders["CompanyRcNumber"] = profile.RcNumber;
+                    placeholders["CompanyAccountNumber"] = profile.AccountNumber ?? "";
+                    placeholders["CompanyXLink"] = profile.XLink ?? "";
+                    placeholders["CompanyFacebookLink"] = profile.FacebookLink ?? "";
+                }
+                else
+                {
+                    placeholders["CompanyName"] = "DogoFinance";
+                    placeholders["CompanyAddress"] = "Tesmot House, 3 Abdulrahman Okene Close, Victoria Island, Lagos";
+                    placeholders["CompanyPhone"] = "+234 800 000 0000";
+                    placeholders["CompanyEmail"] = "info@dogofinance.com";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load company profile for email templates. Using defaults.");
+                placeholders["CompanyName"] = "DogoFinance";
+                placeholders["CompanyAddress"] = "Tesmot House, 3 Abdulrahman Okene Close, Victoria Island, Lagos";
+                placeholders["CompanyPhone"] = "+234 800 000 0000";
+                placeholders["CompanyEmail"] = "info@dogofinance.com";
+            }
+        }
+
         public async Task<bool> SendTemplateEmail(string to, string subject, string templateName, Dictionary<string, string> placeholders)
         {
             try
             {
+                // Inject Company Profile Placeholders
+                await InjectCompanyProfilePlaceholders(placeholders);
+
                 // Find and read template
                 var templatePath = Path.Combine(_env.ContentRootPath, "..", "DogoFinance.Integration", "EmailTemplates", $"{templateName}.html");
                 if (!File.Exists(templatePath))

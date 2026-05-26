@@ -847,5 +847,35 @@ namespace DogoFinance.TransactionManagement.Services
             });
             return response;
         }
+        public async Task<ApiResponse> SubmitManualFundingRequest(long userId, ManualFundingRequestDto request)
+        {
+            var response = new ApiResponse();
+            try
+            {
+                var customer = await _uow.Customers.GetByUserId(userId);
+                if (customer == null) return new ApiResponse { Message = "Customer not found", Status = 404 };
+
+                var manualRequest = new TblManualFundingRequest
+                {
+                    CustomerId = customer.CustomerId,
+                    Amount = request.Amount,
+                    Reference = request.Reference,
+                    ReceiptPath = request.ReceiptPath,
+                    Status = "Pending",
+                    InitiatedAt = DateTime.UtcNow
+                };
+
+                await BaseRepository().Insert(manualRequest);
+                await _uow.SaveChangesAsync();
+
+                response.SetMessage("Manual funding request submitted successfully", true);
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error submitting manual funding request");
+                return new ApiResponse { Message = "An error occurred while submitting your request", Status = 500 };
+            }
+        }
     }
 }
