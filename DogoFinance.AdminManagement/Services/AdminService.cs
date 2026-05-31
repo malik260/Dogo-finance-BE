@@ -816,5 +816,203 @@ namespace DogoFinance.AdminManagement.Services
                 return new ApiResponse { Message = ex.Message, Status = 500 };
             }
         }
+        // ============================================
+        // CORPORATE HUB
+        // ============================================
+
+        public async Task<ApiResponse> GetCorporateRegistrations()
+        {
+            try
+            {
+                var customersQuery = BaseRepository().AsQueryable<TblCustomer>(c => c.CustomerTypeId == 2) // Assuming 2 is Corporate
+                    .Include("TblCorporateContacts")
+                    .Include("TblCorporateDocuments")
+                    .Include("TblCorporateDirectors")
+                    .Include("TblCorporateSignatories")
+                    .Include("TblCustomerBanks.Bank")
+                    .Include("User");
+
+                var customers = await customersQuery.ToListAsync();
+
+                var result = customers.Select(c => new
+                {
+                    Id = c.CustomerId,
+                    BusinessName = c.BusinessName ?? "N/A",
+                    RcNumber = c.RegistrationNumber ?? "N/A",
+                    DateSubmitted = c.CreatedAt.ToString("MMM dd, yyyy"),
+                    DateIncorporated = c.DateOfIncorporation?.ToString("MMM dd, yyyy") ?? "N/A",
+                    RepresentativeName = c.User != null ? $"{c.User.FirstName} {c.User.LastName}" : "N/A",
+                    RepresentativeEmail = c.User?.Email ?? "N/A",
+                    RepresentativePhone = c.User?.PhoneNumber ?? "N/A",
+                    RegisteredAddress = c.Address ?? "N/A",
+                    Status = c.Kycstatus == 2 ? "Verified" : "Pending", // Assuming 2 is Verified
+                    KycProgress = c.TblCorporateDocuments?.Count(d => d.Status == "Verified") ?? 0,
+                    NatureOfBusiness = c.NatureOfBusiness ?? "N/A",
+                    Tin = c.TaxIdentificationNumber ?? "N/A",
+                    EntityType = c.EntityType ?? "Private Limited Company",
+                    AnnualTurnover = c.AnnualTurnover ?? "N/A",
+                    SourceOfFunds = c.SourceOfFunds ?? "N/A",
+                    ClientSegmentation = c.ClientSegmentation ?? "Corporate",
+                    CompanyPhone = c.PhoneNumber ?? "N/A",
+                    CompanyEmail = c.User?.Email ?? "N/A",
+                    
+                    Documents = c.TblCorporateDocuments?.Select(d => new
+                    {
+                        DocumentId = d.DocumentId,
+                        Name = d.DocumentType == "incorporation" ? "Certificate of Incorporation" :
+                               d.DocumentType == "memart" ? "Memorandum and Articles of Association" :
+                               d.DocumentType == "cac2" ? "CAC Form 2" :
+                               d.DocumentType == "cac3" ? "CAC Form 3" :
+                               d.DocumentType == "cac7" ? "CAC Form 7" :
+                               d.DocumentType == "boardResolution" ? "Board Resolution" :
+                               d.DocumentType == "addressVerification" ? "Address Verification Document" :
+                               d.DocumentType == "cacStatusReport" ? "CAC Status Report" :
+                               d.DocumentType,
+                        Type = d.DocumentType,
+                        Status = d.Status?.ToLower(),
+                        FileName = d.FilePath?.Split('/').Last() ?? "",
+                        FileSize = "N/A",
+                        DateUploaded = d.UploadedAt.ToString("MMM dd, yyyy"),
+                        Notes = d.AdminNotes
+                    }).ToList(),
+
+                    Directors = c.TblCorporateDirectors?.Select(d => new
+                    {
+                        DirectorId = d.DirectorId,
+                        Name = $"{d.FirstName} {d.Surname}",
+                        Role = d.Designation,
+                        Shareholding = "N/A",
+                        IdType = d.IdentityType,
+                        IdNumber = d.IdNumber,
+                        Status = d.IsActive ? "Verified" : "Pending"
+                    }).ToList(),
+
+                    Signatories = c.TblCorporateSignatories?.Select(s => new
+                    {
+                        SignatoryId = s.SignatoryId,
+                        Name = $"{s.FirstName} {s.Surname}",
+                        Role = s.Designation,
+                        Shareholding = "N/A",
+                        IdType = s.IdentityType,
+                        IdNumber = s.IdNumber,
+                        Status = s.IsActive ? "Verified" : "Pending"
+                    }).ToList(),
+
+                    ContactPerson = c.TblCorporateContacts?.Where(cc => cc.IsPrimary).Select(cc => new
+                    {
+                        Name = cc.FullName ?? "N/A",
+                        Email = cc.Email ?? "N/A",
+                        Phone = cc.PhoneNumber ?? "N/A"
+                    }).FirstOrDefault(),
+
+                    NairaAccounts = c.TblCustomerBanks?.Where(b => b.CurrencyCode == "NGN").Select(b => new
+                    {
+                        BankName = b.Bank?.BankName ?? "Unknown Bank",
+                        AccountNumber = b.AccountNumber,
+                        AccountName = b.AccountName,
+                        BankBranch = "N/A",
+                        IsDefault = b.IsDefault
+                    }).ToList(),
+
+                    DomiciliaryAccounts = c.TblCustomerBanks?.Where(b => b.CurrencyCode != "NGN").Select(b => new
+                    {
+                        BankName = b.Bank?.BankName ?? "Unknown Bank",
+                        AccountNumber = b.AccountNumber,
+                        AccountName = b.AccountName,
+                        CorrespondentBank = b.CorrespondentBank ?? "N/A",
+                        SortCode = b.SortCode ?? "N/A",
+                        SwiftCode = b.SwiftCode ?? "N/A",
+                        BeneficiaryAccountName = b.BeneficiaryAccountName ?? "N/A",
+                        BeneficiaryAccountNo = b.BeneficiaryAccountNumber ?? "N/A",
+                        IsDefault = b.IsDefault
+                    }).ToList()
+                }).ToList();
+
+                return new ApiResponse { Success = true, Data = result };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get corporate registrations");
+                return new ApiResponse { Message = ex.Message, Status = 500 };
+            }
+        }
+
+        public async Task<ApiResponse> ReviewCorporateDocument(AdminCorporateDocumentReviewRequest request, long adminUserId)
+        {
+            try
+            {
+                var doc = await BaseRepository().FindEntity<TblCorporateDocument>(request.DocumentId);
+                if (doc == null || doc.CustomerId != request.CustomerId)
+                    return new ApiResponse { Message = "Document not found." };
+
+                doc.Status = request.Approved ? "Verified" : "Rejected";
+                doc.ReviewedAt = DateTime.UtcNow;
+                doc.ReviewedByAdminId = adminUserId;
+                doc.AdminNotes = request.AdminNotes;
+
+                await BaseRepository().Update(doc);
+                
+                // If rejected, create a notification for the user
+                if (!request.Approved)
+                {
+                    var notif = new TblNotification
+                    {
+                        CustomerId = request.CustomerId,
+                        Title = "Document Review Rejected",
+                        Message = $"Your document '{doc.DocumentType}' was rejected. Reason: {request.AdminNotes}",
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await BaseRepository().Insert(notif);
+                }
+
+                await BaseRepository().SaveChanges();
+
+                return new ApiResponse { Success = true, Message = "Document reviewed successfully." };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to review corporate document");
+                return new ApiResponse { Message = ex.Message, Status = 500 };
+            }
+        }
+
+        public async Task<ApiResponse> ReviewCorporateRegistration(AdminCorporateRegistrationReviewRequest request, long adminUserId)
+        {
+            try
+            {
+                var profile = await BaseRepository()
+                    .AsQueryable<TblCustomer>(p => p.CustomerId == request.CustomerId)
+                    .FirstOrDefaultAsync();
+                
+                if (profile == null)
+                    return new ApiResponse { Message = "Company profile not found." };
+
+                profile.Kycstatus = request.Approved ? 2 : 1; // Assuming 2=Verified, 1=Pending
+                profile.ModifiedAt = DateTime.UtcNow;
+
+                await BaseRepository().Update(profile);
+
+                // Create a notification for the user
+                var notif = new TblNotification
+                {
+                    CustomerId = request.CustomerId,
+                    Title = request.Approved ? "Corporate Registration Approved" : "Corporate Registration Rejected",
+                    Message = request.Approved 
+                        ? "Congratulations! Your corporate account has been fully verified and approved." 
+                        : $"Your corporate account registration requires attention. Notes: {request.AdminNotes}",
+                    CreatedAt = DateTime.UtcNow
+                };
+                await BaseRepository().Insert(notif);
+
+                await BaseRepository().SaveChanges();
+
+                return new ApiResponse { Success = true, Message = "Corporate registration reviewed successfully." };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to review corporate registration");
+                return new ApiResponse { Message = ex.Message, Status = 500 };
+            }
+        }
     }
 }

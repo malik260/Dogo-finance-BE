@@ -4,6 +4,7 @@ using DogoFinance.DataAccess.Layer.Models.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DogoFinance.DataAccess.Layer.Migrations
 {
     [DbContext(typeof(DogoFinanceContext))]
-    partial class DogoFinanceContextModelSnapshot : ModelSnapshot
+    [Migration("20260530152507_AddCorporateDirector")]
+    partial class AddCorporateDirector
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1533,42 +1535,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.ToTable("TBL_NEXT_OF_KIN");
                 });
 
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblNotification", b =>
-                {
-                    b.Property<long>("NotificationId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("NotificationId"), 1L, 1);
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("(getdate())");
-
-                    b.Property<long>("CustomerId")
-                        .HasColumnType("bigint");
-
-                    b.Property<bool>("IsRead")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("NotificationId");
-
-                    b.HasIndex("CustomerId");
-
-                    b.ToTable("TBL_NOTIFICATION");
-                });
-
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblPasswordReset", b =>
                 {
                     b.Property<long>("Id")
@@ -2369,9 +2335,8 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                             DisplayOrder = 3,
                             Icon = "ri-user-line",
                             IsActive = true,
-                            IsSystemVerified = true,
+                            IsSystemVerified = false,
                             Name = "3. Passport Photography of each Authorized Signatory",
-                            SystemRule = "CheckSignatoryPhotos",
                             TargetEntityTypes = "Corporate",
                             Type = "passport"
                         },
@@ -2403,9 +2368,8 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                             DisplayOrder = 6,
                             Icon = "ri-folder-user-line",
                             IsActive = true,
-                            IsSystemVerified = true,
+                            IsSystemVerified = false,
                             Name = "6. Form CAC 7 (Particulars of Directors)",
-                            SystemRule = "CheckDirectorsAdded",
                             TargetEntityTypes = "Corporate",
                             Type = "cac7"
                         },
@@ -2426,9 +2390,8 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                             DisplayOrder = 8,
                             Icon = "ri-shield-user-line",
                             IsActive = true,
-                            IsSystemVerified = true,
+                            IsSystemVerified = false,
                             Name = "8. Copy of Identification of Authorized Signatories and Directors",
-                            SystemRule = "CheckSignatoryDirectorsId",
                             TargetEntityTypes = "Corporate",
                             Type = "signatoryId"
                         },
@@ -2846,18 +2809,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.Navigation("RelationshipType");
                 });
 
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblNotification", b =>
-                {
-                    b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblCustomer", "Customer")
-                        .WithMany("TblNotifications")
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FK_TBL_NOTIFICATION_CUSTOMER");
-
-                    b.Navigation("Customer");
-                });
-
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblPasswordReset", b =>
                 {
                     b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblUser", "User")
@@ -3109,8 +3060,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.Navigation("TblKycLogs");
 
                     b.Navigation("TblNextOfKins");
-
-                    b.Navigation("TblNotifications");
 
                     b.Navigation("TblWallets");
                 });

@@ -128,6 +128,7 @@ namespace DogoFinance.Authentication.Services
                     user.PhoneNumber,
                     UserId = user.UserId,
                     CustomerId = customer?.CustomerId ?? 0,
+                    CustomerTypeId = customer?.CustomerTypeId ?? 1,
                     SessionId = session.SessionId,
                     user.IsPinSet,
                     Is2faEnabled = user.Is2faEnabled ?? false

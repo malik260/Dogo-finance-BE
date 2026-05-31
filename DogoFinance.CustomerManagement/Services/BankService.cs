@@ -66,7 +66,16 @@ namespace DogoFinance.CustomerManagement.Services
                         cb.AccountNumber,
                         cb.AccountName,
                         BankCode = bank?.BankCode,
-                        cb.IsDefault
+                        cb.IsDefault,
+                        cb.CurrencyCode,
+                        cb.SwiftCode,
+                        cb.SortCode,
+                        cb.CorrespondentBank,
+                        cb.Iban,
+                        cb.BeneficiaryAccountName,
+                        cb.BeneficiaryAccountNumber,
+                        cb.BeneficiaryAddress,
+                        cb.FfcDetails
                     };
                 });
 
@@ -129,7 +138,16 @@ namespace DogoFinance.CustomerManagement.Services
                     AccountName = request.AccountName,
                     IsDefault = isDefault,
                     CreatedAt = DateTime.UtcNow,
-                    IsDeleted = false
+                    IsDeleted = false,
+                    CurrencyCode = string.IsNullOrWhiteSpace(request.CurrencyCode) ? "NGN" : request.CurrencyCode,
+                    SwiftCode = request.SwiftCode,
+                    SortCode = request.SortCode,
+                    CorrespondentBank = request.CorrespondentBank,
+                    Iban = request.Iban,
+                    BeneficiaryAccountName = request.BeneficiaryAccountName,
+                    BeneficiaryAccountNumber = request.BeneficiaryAccountNumber,
+                    BeneficiaryAddress = request.BeneficiaryAddress,
+                    FfcDetails = request.FfcDetails
                 };
 
                 await BaseRepository().Insert(customerBank);

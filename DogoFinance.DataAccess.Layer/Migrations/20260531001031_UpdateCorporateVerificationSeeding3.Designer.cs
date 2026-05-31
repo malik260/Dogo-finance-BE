@@ -4,6 +4,7 @@ using DogoFinance.DataAccess.Layer.Models.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DogoFinance.DataAccess.Layer.Migrations
 {
     [DbContext(typeof(DogoFinanceContext))]
-    partial class DogoFinanceContextModelSnapshot : ModelSnapshot
+    [Migration("20260531001031_UpdateCorporateVerificationSeeding3")]
+    partial class UpdateCorporateVerificationSeeding3
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1533,42 +1535,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.ToTable("TBL_NEXT_OF_KIN");
                 });
 
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblNotification", b =>
-                {
-                    b.Property<long>("NotificationId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("NotificationId"), 1L, 1);
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("(getdate())");
-
-                    b.Property<long>("CustomerId")
-                        .HasColumnType("bigint");
-
-                    b.Property<bool>("IsRead")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("NotificationId");
-
-                    b.HasIndex("CustomerId");
-
-                    b.ToTable("TBL_NOTIFICATION");
-                });
-
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblPasswordReset", b =>
                 {
                     b.Property<long>("Id")
@@ -2846,18 +2812,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.Navigation("RelationshipType");
                 });
 
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblNotification", b =>
-                {
-                    b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblCustomer", "Customer")
-                        .WithMany("TblNotifications")
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FK_TBL_NOTIFICATION_CUSTOMER");
-
-                    b.Navigation("Customer");
-                });
-
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblPasswordReset", b =>
                 {
                     b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblUser", "User")
@@ -3109,8 +3063,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.Navigation("TblKycLogs");
 
                     b.Navigation("TblNextOfKins");
-
-                    b.Navigation("TblNotifications");
 
                     b.Navigation("TblWallets");
                 });

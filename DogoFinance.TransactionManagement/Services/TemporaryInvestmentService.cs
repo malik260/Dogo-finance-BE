@@ -41,12 +41,23 @@ namespace DogoFinance.TransactionManagement.Services
                     return response;
                 }
 
-               
-                // 1. Security Check: BVN
-                if (!customer.Bvnverified)
+                // 1. Security Check: BVN or Corporate Verification
+                if (customer.CustomerTypeId == 2) // Corporate
                 {
-                    response.SetError("BVN verification is required before you can invest. Please verify your BVN in settings.", 403);
-                    return response;
+                    bool isFullyVerified = await IsCorporateVerificationComplete(customer.CustomerId);
+                    if (!isFullyVerified)
+                    {
+                        response.SetError("CORPORATE_VERIFICATION_REQUIRED", 403);
+                        return response;
+                    }
+                }
+                else
+                {
+                    if (!customer.Bvnverified)
+                    {
+                        response.SetError("BVN verification is required before you can invest. Please verify your BVN in settings.", 403);
+                        return response;
+                    }
                 }
 
                 var user = await _uow.Users.GetById(customer.UserId);
@@ -403,6 +414,50 @@ namespace DogoFinance.TransactionManagement.Services
             return response;
         }
 
+
+        private async Task<bool> IsCorporateVerificationComplete(long customerId)
+        {
+            var customer = await _uow.Customers.GetCustomerDetailed(customerId);
+            if (customer == null) return false;
+
+            var checklistItems = await _uow.GenericRepository.FindList<TblVerificationItem>(v => v.IsActive && (v.TargetEntityTypes == null || v.TargetEntityTypes.Contains("Corporate")));
+            var documents = await _uow.GenericRepository.FindList<TblCorporateDocument>(d => d.CustomerId == customerId);
+            var docsDict = documents.ToDictionary(d => d.DocumentType, d => d.Status);
+            
+            var contact = await _uow.GenericRepository.FindEntity<TblCorporateContact>(c => c.CustomerId == customerId && c.IsPrimary);
+            var hasBank = (await _uow.GenericRepository.FindList<TblCustomerBank>(p => p.CustomerId == customerId)).Any();
+            bool appFormVerified = !string.IsNullOrEmpty(customer.BusinessName) && !string.IsNullOrEmpty(customer.RegistrationNumber) && contact != null;
+
+            foreach (var item in checklistItems)
+            {
+                string status = "unverified";
+                if (item.IsSystemVerified)
+                {
+                    switch (item.SystemRule)
+                    {
+                        case "CheckAppForm": status = appFormVerified ? "verified" : "unverified"; break;
+                        case "CheckBankLinked": status = hasBank ? "verified" : "unverified"; break;
+                        case "CheckSignatoryPhotos":
+                            var hasSignatories = await _uow.GenericRepository.FindList<TblCorporateSignatory>(s => s.CustomerId == customerId);
+                            status = hasSignatories.Any() ? "verified" : "unverified"; break;
+                        case "CheckDirectorsAdded":
+                            var hasDirectors = await _uow.GenericRepository.FindList<TblCorporateDirector>(d => d.CustomerId == customerId);
+                            status = hasDirectors.Any() ? "verified" : "unverified"; break;
+                        case "CheckSignatoryDirectorsId":
+                            var sigs = await _uow.GenericRepository.FindList<TblCorporateSignatory>(s => s.CustomerId == customerId);
+                            var dirs = await _uow.GenericRepository.FindList<TblCorporateDirector>(d => d.CustomerId == customerId);
+                            status = (sigs.Any() && dirs.Any()) ? "verified" : "unverified"; break;
+                    }
+                }
+                else
+                {
+                    status = docsDict.GetValueOrDefault(item.Type, "unverified").ToLower();
+                }
+
+                if (status != "verified" && status != "approved") return false;
+            }
+            return true;
+        }
 
         private async Task LogLedger(long transactionId, long walletId, int entryType, decimal amount, decimal balanceAfter, string narration)
         {

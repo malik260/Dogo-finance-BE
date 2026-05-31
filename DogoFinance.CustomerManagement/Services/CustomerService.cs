@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using DogoFinance.TransactionManagement.Interfaces;
 using DogoFinance.Integration.Models.Monnify;
+using Microsoft.EntityFrameworkCore;
 
 namespace DogoFinance.CustomerManagement.Services
 {
@@ -62,6 +63,8 @@ namespace DogoFinance.CustomerManagement.Services
 
                 var (hash, salt) = HashHelper.CreateHash(request.Password);
 
+                bool isCorporate = request.CustomerTypeId == 2;
+
                 var user = new TblUser
                 {
                     UserName = request.Email,
@@ -73,7 +76,9 @@ namespace DogoFinance.CustomerManagement.Services
                     IsLocked = false,
                     FailedLoginAttempts = 0,
                     CreatedAt = DateTime.UtcNow,
-                    IsDeleted = false
+                    IsDeleted = false,
+                    FirstName = isCorporate ? request.BusinessName : request.FirstName,
+                    LastName = isCorporate ? request.BusinessName : request.LastName
                 };
 
                 var verificationCode = new Random().Next(100000, 999999).ToString();
@@ -85,10 +90,15 @@ namespace DogoFinance.CustomerManagement.Services
                 var customer = new TblCustomer
                 {
                     UserId = user.UserId,
-                    FirstName = request.FirstName,
-                    LastName = request.LastName,
+                    FirstName = isCorporate ? request.BusinessName : request.FirstName,
+                    LastName = isCorporate ? request.BusinessName : request.LastName,
                     DateOfBirth = request.DateOfBirth,
                     Gender = request.GenderId,
+                    CustomerTypeId = request.CustomerTypeId,
+                    BusinessName = request.BusinessName,
+                    RegistrationNumber = request.RegistrationNumber,
+                    TaxIdentificationNumber = request.TaxIdentificationNumber,
+                    DateOfIncorporation = request.DateOfIncorporation,
                     IsPolitcallyExposed = request.IsPoliticallyExposed,
                     CreatedAt = DateTime.UtcNow,
                     IsDeleted = false,
@@ -129,14 +139,16 @@ namespace DogoFinance.CustomerManagement.Services
 
                 var emailPlaceholders = new Dictionary<string, string>
                 {
-                    { "FirstName", request.FirstName },
+                    { "FirstName", isCorporate ? request.BusinessName : request.FirstName },
                     { "VerificationLink", verificationLink },
                     { "LogoUrl", "cid:logo" }
                 };
 
+                var emailSubject = isCorporate ? "Verify Your Corporate Account - DogoFinance" : "Verify Your Account - DogoFinance";
+
                 var emailSent = await _emailService.SendTemplateEmail(
                     request.Email, 
-                    "Verify Your Account - DogoFinance", 
+                    emailSubject, 
                     "RegistrationVerification", 
                     emailPlaceholders
                 );
@@ -156,6 +168,8 @@ namespace DogoFinance.CustomerManagement.Services
                 return response;
             }
         }
+
+
 
         public async Task<ApiResponse> VerifyEmail(VerifyEmailRequest request)
         {
@@ -330,7 +344,7 @@ namespace DogoFinance.CustomerManagement.Services
                     {
                         FirstName = customer.FirstName,
                         LastName = customer.LastName,
-                        DateOfBirth = customer.DateOfBirth.ToString("yyyy-MM-dd")
+                        DateOfBirth = customer.DateOfBirth?.ToString("yyyy-MM-dd")
                     }
                 },
                 Metadata = new Dictionary<string, string> { { "customerId", customerId.ToString() } }
@@ -383,7 +397,7 @@ namespace DogoFinance.CustomerManagement.Services
                     {
                         FirstName = customer.FirstName,
                         LastName = customer.LastName,
-                        DateOfBirth = customer.DateOfBirth.ToString("yyyy-MM-dd")
+                        DateOfBirth = customer.DateOfBirth?.ToString("yyyy-MM-dd")
                     }
                 },
                 Metadata = new Dictionary<string, string> { { "customerId", customerId.ToString() } }
@@ -475,6 +489,12 @@ namespace DogoFinance.CustomerManagement.Services
         {
             var genders = await BaseRepository().FindList<TblGender>(g => g.IsActive);
             return new ApiResponse { Success = true, Data = genders, Message = "Genders retrieved successfully", Boolean = true };
+        }
+
+        public async Task<ApiResponse> GetCustomerTypes()
+        {
+            var types = await BaseRepository().FindList<TblCustomerType>(t => true);
+            return new ApiResponse { Success = true, Data = types, Message = "Customer types retrieved successfully", Boolean = true };
         }
 
         public async Task<ApiResponse> GetAddressDocTypes()
@@ -618,6 +638,473 @@ namespace DogoFinance.CustomerManagement.Services
                 _logger.LogError(ex, "Error retrieving company bank details");
                 return new ApiResponse { Message = "Error retrieving company bank details", Status = 500 };
             }
+        }
+
+        public async Task<ApiResponse> GetCorporateProfile(long userId)
+        {
+            var customer = await _uow.Customers.GetByUserId(userId);
+            if (customer == null) return new ApiResponse { Message = "Profile not found", Status = 404 };
+
+            var user = await _uow.Users.GetById(userId);
+
+            var profile = new
+            {
+                CompanyName = customer.BusinessName,
+                customer.RegistrationNumber,
+                customer.DateOfIncorporation,
+                customer.NatureOfBusiness,
+                customer.Address,
+                customer.EntityType,
+                customer.OtherEntityType,
+                Phone = customer.PhoneNumber,
+                Tin = customer.TaxIdentificationNumber,
+                Email = user?.Email,
+                customer.AnnualTurnover,
+                customer.SourceOfFunds,
+                customer.ClientSegmentation
+            };
+
+            return new ApiResponse { Success = true, Data = profile, Message = "Corporate profile retrieved", Boolean = true };
+        }
+
+        public async Task<ApiResponse> UpdateCorporateProfile(long userId, UpdateCorporateProfileRequest request)
+        {
+            var customer = await _uow.Customers.GetByUserId(userId);
+            if (customer == null) return new ApiResponse { Message = "Profile not found", Status = 404 };
+
+            var user = await _uow.Users.GetById(userId);
+            if (user == null) return new ApiResponse { Message = "User not found", Status = 404 };
+
+            if (!string.IsNullOrEmpty(request.CompanyName))
+            {
+                customer.BusinessName = request.CompanyName;
+                customer.FirstName = request.CompanyName;
+                customer.LastName = request.CompanyName;
+                user.FirstName = request.CompanyName;
+                user.LastName = request.CompanyName;
+            }
+            if (!string.IsNullOrEmpty(request.RegistrationNumber)) customer.RegistrationNumber = request.RegistrationNumber;
+            if (request.DateOfIncorporation.HasValue) customer.DateOfIncorporation = request.DateOfIncorporation;
+            if (!string.IsNullOrEmpty(request.NatureOfBusiness)) customer.NatureOfBusiness = request.NatureOfBusiness;
+            if (!string.IsNullOrEmpty(request.Address)) customer.Address = request.Address;
+            if (!string.IsNullOrEmpty(request.EntityType)) customer.EntityType = request.EntityType;
+            if (!string.IsNullOrEmpty(request.OtherEntityType)) customer.OtherEntityType = request.OtherEntityType;
+            if (!string.IsNullOrEmpty(request.Tin)) customer.TaxIdentificationNumber = request.Tin;
+            if (!string.IsNullOrEmpty(request.AnnualTurnover)) customer.AnnualTurnover = request.AnnualTurnover;
+            if (!string.IsNullOrEmpty(request.SourceOfFunds)) customer.SourceOfFunds = request.SourceOfFunds;
+            if (!string.IsNullOrEmpty(request.ClientSegmentation)) customer.ClientSegmentation = request.ClientSegmentation;
+
+            if (!string.IsNullOrEmpty(request.Phone) && request.Phone != user.PhoneNumber)
+            {
+                var existingUser = await _uow.Users.GetByPhoneNumber(request.Phone);
+                if (existingUser != null && existingUser.UserId != userId) return new ApiResponse { Message = "Phone number already in use.", Status = 400 };
+
+                user.PhoneNumber = request.Phone;
+                customer.PhoneNumber = request.Phone;
+            }
+
+            customer.ModifiedAt = DateTime.UtcNow;
+            user.ModifiedAt = DateTime.UtcNow;
+
+            await _uow.Customers.SaveCustomer(customer);
+            await _uow.Users.SaveUser(user);
+
+            var response = await GetCorporateProfile(userId);
+            response.Message = "Corporate profile updated successfully";
+            return response;
+        }
+
+        public async Task<ApiResponse> GetPrimaryContact(long userId)
+        {
+            var customer = await _uow.Customers.GetByUserId(userId);
+            if (customer == null) return new ApiResponse { Message = "Customer not found", Status = 404 };
+
+            var contact = await _uow.GenericRepository.FindEntity<TblCorporateContact>(c => c.CustomerId == customer.CustomerId && c.IsPrimary);
+            
+            if (contact == null)
+            {
+                // Return empty so frontend handles it gracefully
+                return new ApiResponse { Success = true, Data = null, Message = "No primary contact found" };
+            }
+
+            var contactData = new
+            {
+                contact.FullName,
+                contact.Email,
+                Phone = contact.PhoneNumber
+            };
+
+            return new ApiResponse { Success = true, Data = contactData, Message = "Primary contact retrieved" };
+        }
+
+        public async Task<ApiResponse> UpdatePrimaryContact(long userId, UpdateCorporateContactRequest request)
+        {
+            var customer = await _uow.Customers.GetByUserId(userId);
+            if (customer == null) return new ApiResponse { Message = "Customer not found", Status = 404 };
+
+            var contact = await _uow.GenericRepository.FindEntity<TblCorporateContact>(c => c.CustomerId == customer.CustomerId && c.IsPrimary);
+
+            if (contact == null)
+            {
+                contact = new TblCorporateContact
+                {
+                    CustomerId = customer.CustomerId,
+                    IsPrimary = true,
+                    FullName = request.FullName,
+                    Email = request.Email,
+                    PhoneNumber = request.PhoneNumber
+                };
+                await _uow.GenericRepository.Insert(contact);
+            }
+            else
+            {
+                contact.FullName = request.FullName;
+                contact.Email = request.Email;
+                contact.PhoneNumber = request.PhoneNumber;
+                await _uow.GenericRepository.Update(contact);
+            }
+
+            return new ApiResponse { Success = true, Message = "Primary contact updated successfully" };
+        }
+
+        public async Task<ApiResponse> GetCorporateVerifications(long userId)
+        {
+            var customer = await _uow.Customers.GetByUserId(userId);
+            if (customer == null) return new ApiResponse { Message = "Customer not found", Status = 404 };
+
+            // Fetch the dynamic checklist from the database
+            var checklistItems = await _uow.GenericRepository.FindList<TblVerificationItem>(v => v.IsActive && (v.TargetEntityTypes == null || v.TargetEntityTypes.Contains("Corporate")));
+            checklistItems = checklistItems.OrderBy(v => v.DisplayOrder);
+
+            // Fetch uploaded documents
+            var documents = await _uow.GenericRepository.FindList<TblCorporateDocument>(d => d.CustomerId == customer.CustomerId);
+            var docsDict = documents.ToDictionary(d => d.DocumentType, d => d.Status);
+
+            // Fetch other dependencies for system verification
+            var contact = await _uow.GenericRepository.FindEntity<TblCorporateContact>(c => c.CustomerId == customer.CustomerId && c.IsPrimary);
+            
+            // Check banks
+            var hasBank = (await _uow.GenericRepository.FindList<TblCustomerBank>(p => p.CustomerId == customer.CustomerId)).Any();
+
+            // 1. App Form logic
+            bool appFormVerified = !string.IsNullOrEmpty(customer.BusinessName) && 
+                                   !string.IsNullOrEmpty(customer.RegistrationNumber) &&
+                                   contact != null;
+
+            var verifications = new List<CorporateVerificationDto>();
+
+            foreach (var item in checklistItems)
+            {
+                string status = "unverified";
+
+                if (item.IsSystemVerified)
+                {
+                    switch (item.SystemRule)
+                    {
+                        case "CheckAppForm":
+                            status = appFormVerified ? "verified" : "unverified";
+                            break;
+                        case "CheckBankLinked":
+                            status = hasBank ? "verified" : "unverified";
+                            break;
+                        case "CheckSignatoryPhotos":
+                            // Item 3: Verified if there is at least one signatory (passport photo is required to add one)
+                            var hasSignatories = await _uow.GenericRepository.FindList<TblCorporateSignatory>(s => s.CustomerId == customer.CustomerId);
+                            status = hasSignatories.Any() ? "verified" : "unverified";
+                            break;
+                        case "CheckDirectorsAdded":
+                            // Item 6: Verified if there is at least one director
+                            var hasDirectors = await _uow.GenericRepository.FindList<TblCorporateDirector>(d => d.CustomerId == customer.CustomerId);
+                            status = hasDirectors.Any() ? "verified" : "unverified";
+                            break;
+                        case "CheckSignatoryDirectorsId":
+                            // Item 8: Verified if there is at least one signatory and one director (ID document is required for both)
+                            var sigs = await _uow.GenericRepository.FindList<TblCorporateSignatory>(s => s.CustomerId == customer.CustomerId);
+                            var dirs = await _uow.GenericRepository.FindList<TblCorporateDirector>(d => d.CustomerId == customer.CustomerId);
+                            status = (sigs.Any() && dirs.Any()) ? "verified" : "unverified";
+                            break;
+                        default:
+                            status = "unverified";
+                            break;
+                    }
+                }
+                else
+                {
+                    status = docsDict.GetValueOrDefault(item.Type, "unverified").ToLower();
+                }
+
+                verifications.Add(new CorporateVerificationDto
+                {
+                    Name = item.Name,
+                    Type = item.Type,
+                    Status = status,
+                    Icon = item.Icon ?? "ri-file-list-3-line"
+                });
+            }
+
+            return new ApiResponse { Success = true, Data = verifications, Message = "Corporate verifications retrieved" };
+        }
+
+        public async Task<ApiResponse> UploadCorporateDocument(long userId, UploadCorporateDocumentRequest request)
+        {
+            var customer = await _uow.Customers.GetByUserId(userId);
+            if (customer == null) return new ApiResponse { Message = "Customer not found", Status = 404 };
+
+            var (url, publicId) = await _cloudinaryService.UploadImageAsync(request.File, "corporate_documents");
+            if (string.IsNullOrEmpty(url)) return new ApiResponse { Message = "File upload failed", Status = 500 };
+
+            var existingDoc = await _uow.GenericRepository.FindEntity<TblCorporateDocument>(d => d.CustomerId == customer.CustomerId && d.DocumentType == request.DocumentType);
+
+            if (existingDoc != null)
+            {
+                existingDoc.FilePath = url;
+                existingDoc.Status = "Pending";
+                existingDoc.UploadedAt = DateTime.UtcNow;
+                existingDoc.ReviewedAt = null;
+                existingDoc.ReviewedByAdminId = null;
+                await _uow.GenericRepository.Update(existingDoc);
+            }
+            else
+            {
+                var doc = new TblCorporateDocument
+                {
+                    CustomerId = customer.CustomerId,
+                    DocumentType = request.DocumentType,
+                    FilePath = url,
+                    Status = "Pending",
+                    UploadedAt = DateTime.UtcNow
+                };
+                await _uow.GenericRepository.Insert(doc);
+            }
+
+            return new ApiResponse { Success = true, Message = "Document uploaded successfully", Data = new { Url = url } };
+        }
+
+        public async Task<ApiResponse> AddCorporateSignatory(long userId, AddCorporateSignatoryRequest request)
+        {
+            try
+            {
+                var customer = await _uow.GenericRepository.FindEntity<TblCustomer>(c => c.UserId == userId);
+                if (customer == null)
+                    return new ApiResponse { Success = false, Message = "Customer not found", Status = 404 };
+
+                // Upload files to Cloudinary
+                var (passportUrl, _) = await _cloudinaryService.UploadImageAsync(request.PassportPhoto, "signatories/passports");
+                var (signatureUrl, _) = await _cloudinaryService.UploadImageAsync(request.SignatureCard, "signatories/signatures");
+                var (idDocUrl, _) = await _cloudinaryService.UploadImageAsync(request.IdentityDocument, "signatories/id_docs");
+
+                if (string.IsNullOrEmpty(passportUrl) || string.IsNullOrEmpty(signatureUrl) || string.IsNullOrEmpty(idDocUrl))
+                {
+                    return new ApiResponse { Success = false, Message = "File upload failed", Status = 500 };
+                }
+
+                var dob = DateTime.Parse(request.DateOfBirth);
+
+                var signatory = new TblCorporateSignatory
+                {
+                    CustomerId = customer.CustomerId,
+                    Title = request.Title,
+                    Surname = request.Surname,
+                    FirstName = request.FirstName,
+                    OtherNames = request.OtherNames,
+                    Designation = request.Designation,
+                    DateOfBirth = dob,
+                    ResidentialAddress = request.ResidentialAddress,
+                    BusinessEmail = request.BusinessEmail,
+                    PhoneNumber = request.PhoneNumber,
+                    Bvn = request.Bvn,
+                    Nationality = request.Nationality,
+                    Gender = request.Gender,
+                    SigningClass = request.SigningClass,
+                    IdentityType = request.IdentityType,
+                    IdNumber = request.IdNumber,
+                    IsPep = request.IsPep,
+                    PassportPhotoUrl = passportUrl,
+                    SignatureCardUrl = signatureUrl,
+                    IdentityDocumentUrl = idDocUrl,
+                    IsActive = true
+                };
+
+                await _uow.GenericRepository.Insert(signatory);
+
+                return new ApiResponse
+                {
+                    Success = true,
+                    Message = "Signatory added successfully",
+                    Data = signatory
+                };
+            }
+            catch (Exception ex)
+            {
+
+                throw;
+            }
+        }
+
+        public async Task<ApiResponse> GetCorporateSignatories(long userId)
+        {
+            var customer = await _uow.GenericRepository.FindEntity<TblCustomer>(c => c.UserId == userId);
+            if (customer == null)
+                return new ApiResponse { Success = false, Message = "Customer not found", Status = 404 };
+
+            var signatories = await _uow.GenericRepository.FindList<TblCorporateSignatory>(s => s.CustomerId == customer.CustomerId && !s.IsDeleted);
+
+            return new ApiResponse
+            {
+                Success = true,
+                Message = "Signatories retrieved",
+                Data = signatories
+            };
+        }
+
+        public async Task<ApiResponse> DeleteCorporateSignatory(long userId, int signatoryId)
+        {
+            var customer = await _uow.GenericRepository.FindEntity<TblCustomer>(c => c.UserId == userId);
+            if (customer == null)
+                return new ApiResponse { Success = false, Message = "Customer not found", Status = 404 };
+
+            var signatory = await _uow.GenericRepository.FindEntity<TblCorporateSignatory>(s => s.SignatoryId == signatoryId && s.CustomerId == customer.CustomerId && !s.IsDeleted);
+            if (signatory == null)
+                return new ApiResponse { Success = false, Message = "Signatory not found", Status = 404 };
+
+            signatory.IsDeleted = true;
+            signatory.DeletedAt = DateTime.UtcNow;
+            await _uow.GenericRepository.Update(signatory);
+
+            return new ApiResponse
+            {
+                Success = true,
+                Message = "Signatory removed successfully"
+            };
+        }
+        public async Task<ApiResponse> AddCorporateDirector(long userId, AddCorporateDirectorRequest request)
+        {
+            var customer = await _uow.GenericRepository.FindEntity<TblCustomer>(c => c.UserId == userId);
+            if (customer == null)
+                return new ApiResponse { Success = false, Message = "Customer not found", Status = 404 };
+
+            // Upload files to Cloudinary
+            var (passportUrl, _) = await _cloudinaryService.UploadImageAsync(request.PassportPhoto, "directors/passports");
+            var (signatureUrl, _) = await _cloudinaryService.UploadImageAsync(request.SignatureCard, "directors/signatures");
+            var (idDocUrl, _) = await _cloudinaryService.UploadImageAsync(request.IdentityDocument, "directors/id_docs");
+
+            if (string.IsNullOrEmpty(passportUrl) || string.IsNullOrEmpty(signatureUrl) || string.IsNullOrEmpty(idDocUrl))
+            {
+                return new ApiResponse { Success = false, Message = "File upload failed", Status = 500 };
+            }
+
+            var dob = DateTime.Parse(request.DateOfBirth);
+
+            var director = new TblCorporateDirector
+            {
+                CustomerId = customer.CustomerId,
+                Title = request.Title,
+                Surname = request.Surname,
+                FirstName = request.FirstName,
+                OtherNames = request.OtherNames,
+                Designation = request.Designation,
+                DateOfBirth = dob,
+                ResidentialAddress = request.ResidentialAddress,
+                BusinessEmail = request.BusinessEmail,
+                PhoneNumber = request.PhoneNumber,
+                Bvn = request.Bvn,
+                Nationality = request.Nationality,
+                Gender = request.Gender,
+                SigningClass = request.SigningClass,
+                IdentityType = request.IdentityType,
+                IdNumber = request.IdNumber,
+                IsPep = request.IsPep,
+                PassportPhotoUrl = passportUrl,
+                SignatureCardUrl = signatureUrl,
+                IdentityDocumentUrl = idDocUrl,
+                IsActive = true
+            };
+
+            await _uow.GenericRepository.Insert(director);
+
+            return new ApiResponse
+            {
+                Success = true,
+                Message = "Director added successfully",
+                Data = director
+            };
+        }
+
+        public async Task<ApiResponse> GetCorporateDirectors(long userId)
+        {
+            var customer = await _uow.GenericRepository.FindEntity<TblCustomer>(c => c.UserId == userId);
+            if (customer == null)
+                return new ApiResponse { Success = false, Message = "Customer not found", Status = 404 };
+
+            var directors = await _uow.GenericRepository.FindList<TblCorporateDirector>(s => s.CustomerId == customer.CustomerId && !s.IsDeleted);
+
+            return new ApiResponse
+            {
+                Success = true,
+                Message = "Directors retrieved",
+                Data = directors
+            };
+        }
+
+        public async Task<ApiResponse> DeleteCorporateDirector(long userId, int directorId)
+        {
+            var customer = await _uow.GenericRepository.FindEntity<TblCustomer>(c => c.UserId == userId);
+            if (customer == null)
+                return new ApiResponse { Success = false, Message = "Customer not found", Status = 404 };
+
+            var director = await _uow.GenericRepository.FindEntity<TblCorporateDirector>(s => s.DirectorId == directorId && s.CustomerId == customer.CustomerId && !s.IsDeleted);
+            if (director == null)
+                return new ApiResponse { Success = false, Message = "Director not found", Status = 404 };
+
+            director.IsDeleted = true;
+            director.DeletedAt = DateTime.UtcNow;
+            await _uow.GenericRepository.Update(director);
+
+            return new ApiResponse
+            {
+                Success = true,
+                Message = "Director removed successfully"
+            };
+        }
+
+        public async Task<ApiResponse> GetNotifications(long userId)
+        {
+            var customer = await _uow.GenericRepository.FindEntity<TblCustomer>(c => c.UserId == userId);
+            if (customer == null)
+                return new ApiResponse { Success = false, Message = "Customer not found", Status = 404 };
+
+            var notifications = await _uow.GenericRepository.AsQueryable<TblNotification>(n => n.CustomerId == customer.CustomerId)
+                .OrderByDescending(n => n.CreatedAt)
+                .ToListAsync();
+
+            return new ApiResponse
+            {
+                Success = true,
+                Data = notifications.Select(n => new
+                {
+                    n.NotificationId,
+                    n.Title,
+                    n.Message,
+                    n.IsRead,
+                    CreatedAt = n.CreatedAt.ToString("MMM dd, yyyy h:mm tt")
+                }).ToList()
+            };
+        }
+
+        public async Task<ApiResponse> MarkNotificationRead(long notificationId, long userId)
+        {
+            var customer = await _uow.GenericRepository.FindEntity<TblCustomer>(c => c.UserId == userId);
+            if (customer == null)
+                return new ApiResponse { Success = false, Message = "Customer not found", Status = 404 };
+
+            var notif = await _uow.GenericRepository.FindEntity<TblNotification>(n => n.NotificationId == notificationId && n.CustomerId == customer.CustomerId);
+            if (notif == null)
+                return new ApiResponse { Success = false, Message = "Notification not found", Status = 404 };
+
+            notif.IsRead = true;
+            await _uow.GenericRepository.Update(notif);
+
+            return new ApiResponse { Success = true, Message = "Notification marked as read" };
         }
     }
 }

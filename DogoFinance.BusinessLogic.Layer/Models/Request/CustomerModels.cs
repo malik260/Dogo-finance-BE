@@ -62,4 +62,103 @@ namespace DogoFinance.BusinessLogic.Layer.Models.Request
         public string? CorrectedCity { get; set; }
         public string? CorrectedState { get; set; }
     }
+
+    public class UpdateCorporateProfileRequest
+    {
+        public string? CompanyName { get; set; }
+        public string? RegistrationNumber { get; set; }
+        public DateTime? DateOfIncorporation { get; set; }
+        public string? NatureOfBusiness { get; set; }
+        public string? Address { get; set; }
+        public string? EntityType { get; set; }
+        public string? OtherEntityType { get; set; }
+        public string? Phone { get; set; }
+        public string? Tin { get; set; }
+        public string? Email { get; set; }
+        public string? AnnualTurnover { get; set; }
+        public string? SourceOfFunds { get; set; }
+        public string? ClientSegmentation { get; set; }
+    }
+
+    public class UpdateCorporateContactRequest
+    {
+        [Required]
+        [StringLength(150)]
+        public string FullName { get; set; } = null!;
+
+        [Required]
+        [EmailAddress]
+        [StringLength(150)]
+        public string Email { get; set; } = null!;
+
+        [Required]
+        [Phone]
+        [StringLength(50)]
+        public string PhoneNumber { get; set; } = null!;
+    }
+
+    public class CorporateVerificationDto
+    {
+        public string Name { get; set; } = null!;
+        public string Type { get; set; } = null!;
+        public string Status { get; set; } = null!; // "verified", "pending", "unverified"
+        public string Icon { get; set; } = null!;
+        public string Date { get; set; } = "N/A";
+    }
+
+    public class UploadCorporateDocumentRequest
+    {
+        [Required]
+        public string DocumentType { get; set; } = null!;
+
+        [Required]
+        public Microsoft.AspNetCore.Http.IFormFile File { get; set; } = null!;
+    }
+
+    public class AddCorporateSignatoryRequest
+    {
+        [Required] public string Title { get; set; } = null!;
+        [Required] public string Surname { get; set; } = null!;
+        [Required] public string FirstName { get; set; } = null!;
+        public string? OtherNames { get; set; }
+        [Required] public string Designation { get; set; } = null!;
+        [Required] public string DateOfBirth { get; set; } = null!;
+        [Required] public string ResidentialAddress { get; set; } = null!;
+        [Required] public string BusinessEmail { get; set; } = null!;
+        [Required] public string PhoneNumber { get; set; } = null!;
+        [Required] public string Bvn { get; set; } = null!;
+        [Required] public string Nationality { get; set; } = null!;
+        [Required] public string Gender { get; set; } = null!;
+        [Required] public string SigningClass { get; set; } = null!;
+        [Required] public string IdentityType { get; set; } = null!;
+        [Required] public string IdNumber { get; set; } = null!;
+        [Required] public bool IsPep { get; set; }
+
+        [Required] public Microsoft.AspNetCore.Http.IFormFile PassportPhoto { get; set; } = null!;
+        [Required] public Microsoft.AspNetCore.Http.IFormFile SignatureCard { get; set; } = null!;
+        [Required] public Microsoft.AspNetCore.Http.IFormFile IdentityDocument { get; set; } = null!;
+    }
+    public class AddCorporateDirectorRequest
+    {
+        [Required] public string Title { get; set; } = null!;
+        [Required] public string Surname { get; set; } = null!;
+        [Required] public string FirstName { get; set; } = null!;
+        public string? OtherNames { get; set; }
+        [Required] public string Designation { get; set; } = null!;
+        [Required] public string DateOfBirth { get; set; } = null!;
+        [Required] public string ResidentialAddress { get; set; } = null!;
+        [Required] public string BusinessEmail { get; set; } = null!;
+        [Required] public string PhoneNumber { get; set; } = null!;
+        [Required] public string Bvn { get; set; } = null!;
+        [Required] public string Nationality { get; set; } = null!;
+        [Required] public string Gender { get; set; } = null!;
+        [Required] public string SigningClass { get; set; } = null!;
+        [Required] public string IdentityType { get; set; } = null!;
+        [Required] public string IdNumber { get; set; } = null!;
+        [Required] public bool IsPep { get; set; }
+
+        [Required] public Microsoft.AspNetCore.Http.IFormFile PassportPhoto { get; set; } = null!;
+        [Required] public Microsoft.AspNetCore.Http.IFormFile SignatureCard { get; set; } = null!;
+        [Required] public Microsoft.AspNetCore.Http.IFormFile IdentityDocument { get; set; } = null!;
+    }
 }

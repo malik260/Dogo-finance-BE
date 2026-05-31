@@ -20,6 +20,7 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
 
         public virtual DbSet<TblCurrency> TblCurrencies { get; set; } = null!;
         public virtual DbSet<TblCustomer> TblCustomers { get; set; } = null!;
+        public virtual DbSet<TblCustomerType> TblCustomerTypes { get; set; } = null!;
         public virtual DbSet<TblKycLog> TblKycLogs { get; set; } = null!;
         public virtual DbSet<TblLedger> TblLedgers { get; set; } = null!;
         public virtual DbSet<TblNextOfKin> TblNextOfKins { get; set; } = null!;
@@ -47,6 +48,12 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public virtual DbSet<TblWithdrawalRequest> TblWithdrawalRequests { get; set; } = null!;
         public virtual DbSet<TblLiquidationRequest> TblLiquidationRequests { get; set; } = null!;
         public virtual DbSet<TblManualFundingRequest> TblManualFundingRequests { get; set; } = null!;
+        public virtual DbSet<TblCorporateContact> TblCorporateContacts { get; set; } = null!;
+        public virtual DbSet<TblCorporateDocument> TblCorporateDocuments { get; set; } = null!;
+        public virtual DbSet<TblVerificationItem> TblVerificationItems { get; set; } = null!;
+        public virtual DbSet<TblCorporateSignatory> TblCorporateSignatories { get; set; } = null!;
+        public virtual DbSet<TblCorporateDirector> TblCorporateDirectors { get; set; } = null!;
+        public virtual DbSet<TblNotification> TblNotifications { get; set; } = null!;
 
 
         // Portfolio Management
@@ -96,7 +103,13 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
                     .IsUnique()
                     .HasFilter("([NIN] IS NOT NULL)");
 
+                entity.Property(e => e.CustomerTypeId).HasDefaultValueSql("((1))");
                 entity.Property(e => e.Country).HasDefaultValueSql("('Nigeria')");
+
+                entity.HasOne(d => d.CustomerType)
+                    .WithMany(p => p.TblCustomers)
+                    .HasForeignKey(d => d.CustomerTypeId)
+                    .HasConstraintName("FK_TBL_CUSTOMER_CUSTOMER_TYPE");
 
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
 
@@ -109,6 +122,46 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
                     .HasForeignKey<TblCustomer>(d => d.UserId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_TBL_CUSTOMER_USER");
+            });
+
+            modelBuilder.Entity<TblCorporateContact>(entity =>
+            {
+                entity.HasOne(d => d.Customer)
+                    .WithMany(p => p.TblCorporateContacts)
+                    .HasForeignKey(d => d.CustomerId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_CORPORATE_CONTACT_CUSTOMER");
+            });
+
+            modelBuilder.Entity<TblCorporateDirector>(entity =>
+            {
+                entity.HasOne(d => d.Customer)
+                    .WithMany(p => p.TblCorporateDirectors)
+                    .HasForeignKey(d => d.CustomerId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_TBL_CORPORATE_DIRECTOR_TBL_CUSTOMER");
+            });
+
+            modelBuilder.Entity<TblNotification>(entity =>
+            {
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+
+                entity.HasOne(d => d.Customer)
+                    .WithMany(p => p.TblNotifications)
+                    .HasForeignKey(d => d.CustomerId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("FK_TBL_NOTIFICATION_CUSTOMER");
+            });
+
+            modelBuilder.Entity<TblCorporateSignatory>(entity =>
+            {
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+
+                entity.HasOne(d => d.Customer)
+                    .WithMany(p => p.TblCorporateSignatories)
+                    .HasForeignKey(d => d.CustomerId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_CORPORATE_SIGNATORY_CUSTOMER");
             });
 
             modelBuilder.Entity<TblKycLog>(entity =>
@@ -255,9 +308,20 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
                 entity.Property(e => e.IsActive).HasDefaultValueSql("((1))");
             });
 
+            modelBuilder.Entity<TblCustomerType>(entity =>
+            {
+                entity.Property(e => e.IsActive).HasDefaultValueSql("((1))");
+
+                entity.HasData(
+                    new TblCustomerType { Id = 1, Name = "Individual", Description = "Individual Customer Account", IsActive = true },
+                    new TblCustomerType { Id = 2, Name = "Corporate", Description = "Corporate/Business Account", IsActive = true }
+                );
+            });
+
             modelBuilder.Entity<TblCustomerBank>(entity =>
             {
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+                entity.Property(e => e.CurrencyCode).HasDefaultValueSql("('NGN')");
 
                 entity.HasOne(d => d.Bank)
                     .WithMany(p => p.TblCustomerBanks)
@@ -387,6 +451,23 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
 
             modelBuilder.Entity<TblJournalLine>(entity => {
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            });
+
+            modelBuilder.Entity<TblVerificationItem>(entity => {
+                entity.Property(e => e.IsActive).HasDefaultValueSql("((1))");
+
+                entity.HasData(
+                    new TblVerificationItem { Id = 1, Name = "1. Completed Application Form", Type = "appForm", IsSystemVerified = true, SystemRule = "CheckAppForm", TargetEntityTypes = "Corporate", Icon = "ri-file-list-3-line", DisplayOrder = 1, IsActive = true },
+                    new TblVerificationItem { Id = 2, Name = "2. Certificate of Incorporation", Type = "incorporation", IsSystemVerified = false, TargetEntityTypes = "Corporate", Icon = "ri-verified-badge-line", DisplayOrder = 2, IsActive = true },
+                    new TblVerificationItem { Id = 3, Name = "3. Passport Photography of each Authorized Signatory", Type = "passport", IsSystemVerified = true, SystemRule = "CheckSignatoryPhotos", TargetEntityTypes = "Corporate", Icon = "ri-user-line", DisplayOrder = 3, IsActive = true },
+                    new TblVerificationItem { Id = 4, Name = "4. Memorandum & Articles of Association", Type = "memart", IsSystemVerified = false, TargetEntityTypes = "Corporate", Icon = "ri-book-read-line", DisplayOrder = 4, IsActive = true },
+                    new TblVerificationItem { Id = 5, Name = "5. Form CAC 2 (Return of Allotment of Shares)", Type = "cac2", IsSystemVerified = false, TargetEntityTypes = "Corporate", Icon = "ri-pie-chart-line", DisplayOrder = 5, IsActive = true },
+                    new TblVerificationItem { Id = 6, Name = "6. Form CAC 7 (Particulars of Directors)", Type = "cac7", IsSystemVerified = true, SystemRule = "CheckDirectorsAdded", TargetEntityTypes = "Corporate", Icon = "ri-folder-user-line", DisplayOrder = 6, IsActive = true },
+                    new TblVerificationItem { Id = 7, Name = "7. Form CAC 3 (Notice of Situation/Change of Registered Address)", Type = "cac3", IsSystemVerified = false, TargetEntityTypes = "Corporate", Icon = "ri-map-pin-user-line", DisplayOrder = 7, IsActive = true },
+                    new TblVerificationItem { Id = 8, Name = "8. Copy of Identification of Authorized Signatories and Directors", Type = "signatoryId", IsSystemVerified = true, SystemRule = "CheckSignatoryDirectorsId", TargetEntityTypes = "Corporate", Icon = "ri-shield-user-line", DisplayOrder = 8, IsActive = true },
+                    new TblVerificationItem { Id = 9, Name = "9. Board Resolution/minutes of meeting confirming Authorized Signatories", Type = "boardResolution", IsSystemVerified = false, TargetEntityTypes = "Corporate", Icon = "ri-team-line", DisplayOrder = 9, IsActive = true },
+                    new TblVerificationItem { Id = 10, Name = "10. Link Settlement Bank Account", Type = "settlementLink", IsSystemVerified = true, SystemRule = "CheckBankLinked", TargetEntityTypes = "Corporate", Icon = "ri-bank-line", DisplayOrder = 10, IsActive = true }
+                );
             });
 
             OnModelCreatingPartial(modelBuilder);

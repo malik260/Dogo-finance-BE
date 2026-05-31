@@ -44,6 +44,11 @@ namespace DogoFinance.AdminManagement.Interfaces
         // Manual Funding Management
         Task<ApiResponse> ListManualFundingRequests(string? status);
         Task<ApiResponse> ReviewManualFundingRequest(AdminManualFundingReviewRequest request, long adminUserId);
+
+        // Corporate Hub
+        Task<ApiResponse> GetCorporateRegistrations();
+        Task<ApiResponse> ReviewCorporateDocument(AdminCorporateDocumentReviewRequest request, long adminUserId);
+        Task<ApiResponse> ReviewCorporateRegistration(AdminCorporateRegistrationReviewRequest request, long adminUserId);
     }
 
     public class AdminWithdrawalReviewRequest
@@ -56,6 +61,21 @@ namespace DogoFinance.AdminManagement.Interfaces
     public class AdminLiquidationReviewRequest
     {
         public long RequestId { get; set; }
+        public bool Approved { get; set; }
+        public string? AdminNotes { get; set; }
+    }
+
+    public class AdminCorporateDocumentReviewRequest
+    {
+        public long CustomerId { get; set; }
+        public long DocumentId { get; set; }
+        public bool Approved { get; set; }
+        public string? AdminNotes { get; set; }
+    }
+
+    public class AdminCorporateRegistrationReviewRequest
+    {
+        public long CustomerId { get; set; }
         public bool Approved { get; set; }
         public string? AdminNotes { get; set; }
     }

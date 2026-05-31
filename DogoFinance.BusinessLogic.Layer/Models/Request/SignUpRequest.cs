@@ -5,12 +5,25 @@ namespace DogoFinance.BusinessLogic.Layer.Models.Request
     public class SignUpRequest
     {
         [Required]
-        [StringLength(100)]
-        public string FirstName { get; set; } = null!;
+        public int CustomerTypeId { get; set; }
 
-        [Required]
         [StringLength(100)]
-        public string LastName { get; set; } = null!;
+        public string? FirstName { get; set; }
+
+        [StringLength(100)]
+        public string? LastName { get; set; }
+
+        // Corporate specific fields
+        [StringLength(250)]
+        public string? BusinessName { get; set; }
+
+        [StringLength(100)]
+        public string? RegistrationNumber { get; set; }
+
+        [StringLength(50)]
+        public string? TaxIdentificationNumber { get; set; }
+
+        public DateTime? DateOfIncorporation { get; set; }
 
         [Required]
         [EmailAddress]
@@ -31,11 +44,9 @@ namespace DogoFinance.BusinessLogic.Layer.Models.Request
         [Compare(nameof(Password))]
         public string ConfirmPassword { get; set; } = null!;
 
-        [Required]
-        public DateTime DateOfBirth { get; set; }
+        public DateTime? DateOfBirth { get; set; }
 
-        [Required]
-        public int GenderId { get; set; }
+        public int? GenderId { get; set; }
 
         public bool IsPoliticallyExposed { get; set; }
 

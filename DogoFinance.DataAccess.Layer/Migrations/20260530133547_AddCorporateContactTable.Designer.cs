@@ -4,6 +4,7 @@ using DogoFinance.DataAccess.Layer.Models.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DogoFinance.DataAccess.Layer.Migrations
 {
     [DbContext(typeof(DogoFinanceContext))]
-    partial class DogoFinanceContextModelSnapshot : ModelSnapshot
+    [Migration("20260530133547_AddCorporateContactTable")]
+    partial class AddCorporateContactTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -287,302 +289,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.HasIndex("CustomerId");
 
                     b.ToTable("TBL_CORPORATE_CONTACT");
-                });
-
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblCorporateDirector", b =>
-                {
-                    b.Property<int>("DirectorId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DirectorId"), 1L, 1);
-
-                    b.Property<string>("BusinessEmail")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Bvn")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long>("CustomerId")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("DateOfBirth")
-                        .HasColumnType("date");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Designation")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("FirstName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Gender")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("IdNumber")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("IdentityDocumentUrl")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("IdentityType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsPep")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Nationality")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("OtherNames")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("PassportPhotoUrl")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("PhoneNumber")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("ResidentialAddress")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("SignatureCardUrl")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("SigningClass")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Surname")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("DirectorId");
-
-                    b.HasIndex("CustomerId");
-
-                    b.ToTable("TBL_CORPORATE_DIRECTOR");
-                });
-
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblCorporateDocument", b =>
-                {
-                    b.Property<long>("DocumentId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("DocumentId"), 1L, 1);
-
-                    b.Property<string>("AdminNotes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<long>("CustomerId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("DocumentType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("FilePath")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long?>("ReviewedByAdminId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime>("UploadedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("DocumentId");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("ReviewedByAdminId");
-
-                    b.ToTable("TBL_CORPORATE_DOCUMENT");
-                });
-
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblCorporateSignatory", b =>
-                {
-                    b.Property<int>("SignatoryId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SignatoryId"), 1L, 1);
-
-                    b.Property<string>("BusinessEmail")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Bvn")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("(getdate())");
-
-                    b.Property<long>("CustomerId")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("DateOfBirth")
-                        .HasColumnType("date");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Designation")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("FirstName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Gender")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("IdNumber")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("IdentityDocumentUrl")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("IdentityType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsPep")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Nationality")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("OtherNames")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("PassportPhotoUrl")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("PhoneNumber")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("ResidentialAddress")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("SignatureCardUrl")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("SigningClass")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Surname")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("SignatoryId");
-
-                    b.HasIndex("CustomerId");
-
-                    b.ToTable("TBL_CORPORATE_SIGNATORY");
                 });
 
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblCurrency", b =>
@@ -883,58 +589,19 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.Property<int>("BankId")
                         .HasColumnType("int");
 
-                    b.Property<string>("BeneficiaryAccountName")
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.Property<string>("BeneficiaryAccountNumber")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("BeneficiaryAddress")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("CorrespondentBank")
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
                         .HasDefaultValueSql("(getdate())");
 
-                    b.Property<string>("CurrencyCode")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(3)
-                        .HasColumnType("nvarchar(3)")
-                        .HasDefaultValueSql("('NGN')");
-
                     b.Property<long>("CustomerId")
                         .HasColumnType("bigint");
-
-                    b.Property<string>("FfcDetails")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("Iban")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
 
                     b.Property<bool>("IsDefault")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
-
-                    b.Property<string>("SortCode")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("SwiftCode")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
 
                     b.HasKey("CustomerBankId");
 
@@ -1531,42 +1198,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.HasIndex("RelationshipTypeId");
 
                     b.ToTable("TBL_NEXT_OF_KIN");
-                });
-
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblNotification", b =>
-                {
-                    b.Property<long>("NotificationId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("NotificationId"), 1L, 1);
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("(getdate())");
-
-                    b.Property<long>("CustomerId")
-                        .HasColumnType("bigint");
-
-                    b.Property<bool>("IsRead")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("NotificationId");
-
-                    b.HasIndex("CustomerId");
-
-                    b.ToTable("TBL_NOTIFICATION");
                 });
 
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblPasswordReset", b =>
@@ -2294,169 +1925,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.ToTable("TBL_USER_SESSION");
                 });
 
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblVerificationItem", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Icon")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValueSql("((1))");
-
-                    b.Property<bool>("IsSystemVerified")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.Property<string>("SystemRule")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("TargetEntityTypes")
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("TBL_VERIFICATION_ITEM");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            DisplayOrder = 1,
-                            Icon = "ri-file-list-3-line",
-                            IsActive = true,
-                            IsSystemVerified = true,
-                            Name = "1. Completed Application Form",
-                            SystemRule = "CheckAppForm",
-                            TargetEntityTypes = "Corporate",
-                            Type = "appForm"
-                        },
-                        new
-                        {
-                            Id = 2,
-                            DisplayOrder = 2,
-                            Icon = "ri-verified-badge-line",
-                            IsActive = true,
-                            IsSystemVerified = false,
-                            Name = "2. Certificate of Incorporation",
-                            TargetEntityTypes = "Corporate",
-                            Type = "incorporation"
-                        },
-                        new
-                        {
-                            Id = 3,
-                            DisplayOrder = 3,
-                            Icon = "ri-user-line",
-                            IsActive = true,
-                            IsSystemVerified = true,
-                            Name = "3. Passport Photography of each Authorized Signatory",
-                            SystemRule = "CheckSignatoryPhotos",
-                            TargetEntityTypes = "Corporate",
-                            Type = "passport"
-                        },
-                        new
-                        {
-                            Id = 4,
-                            DisplayOrder = 4,
-                            Icon = "ri-book-read-line",
-                            IsActive = true,
-                            IsSystemVerified = false,
-                            Name = "4. Memorandum & Articles of Association",
-                            TargetEntityTypes = "Corporate",
-                            Type = "memart"
-                        },
-                        new
-                        {
-                            Id = 5,
-                            DisplayOrder = 5,
-                            Icon = "ri-pie-chart-line",
-                            IsActive = true,
-                            IsSystemVerified = false,
-                            Name = "5. Form CAC 2 (Return of Allotment of Shares)",
-                            TargetEntityTypes = "Corporate",
-                            Type = "cac2"
-                        },
-                        new
-                        {
-                            Id = 6,
-                            DisplayOrder = 6,
-                            Icon = "ri-folder-user-line",
-                            IsActive = true,
-                            IsSystemVerified = true,
-                            Name = "6. Form CAC 7 (Particulars of Directors)",
-                            SystemRule = "CheckDirectorsAdded",
-                            TargetEntityTypes = "Corporate",
-                            Type = "cac7"
-                        },
-                        new
-                        {
-                            Id = 7,
-                            DisplayOrder = 7,
-                            Icon = "ri-map-pin-user-line",
-                            IsActive = true,
-                            IsSystemVerified = false,
-                            Name = "7. Form CAC 3 (Notice of Situation/Change of Registered Address)",
-                            TargetEntityTypes = "Corporate",
-                            Type = "cac3"
-                        },
-                        new
-                        {
-                            Id = 8,
-                            DisplayOrder = 8,
-                            Icon = "ri-shield-user-line",
-                            IsActive = true,
-                            IsSystemVerified = true,
-                            Name = "8. Copy of Identification of Authorized Signatories and Directors",
-                            SystemRule = "CheckSignatoryDirectorsId",
-                            TargetEntityTypes = "Corporate",
-                            Type = "signatoryId"
-                        },
-                        new
-                        {
-                            Id = 9,
-                            DisplayOrder = 9,
-                            Icon = "ri-team-line",
-                            IsActive = true,
-                            IsSystemVerified = false,
-                            Name = "9. Board Resolution/minutes of meeting confirming Authorized Signatories",
-                            TargetEntityTypes = "Corporate",
-                            Type = "boardResolution"
-                        },
-                        new
-                        {
-                            Id = 10,
-                            DisplayOrder = 10,
-                            Icon = "ri-bank-line",
-                            IsActive = true,
-                            IsSystemVerified = true,
-                            Name = "10. Link Settlement Bank Account",
-                            SystemRule = "CheckBankLinked",
-                            TargetEntityTypes = "Corporate",
-                            Type = "settlementLink"
-                        });
-                });
-
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblWallet", b =>
                 {
                     b.Property<long>("WalletId")
@@ -2580,45 +2048,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                         .HasForeignKey("CustomerId")
                         .IsRequired()
                         .HasConstraintName("FK_CORPORATE_CONTACT_CUSTOMER");
-
-                    b.Navigation("Customer");
-                });
-
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblCorporateDirector", b =>
-                {
-                    b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblCustomer", "Customer")
-                        .WithMany("TblCorporateDirectors")
-                        .HasForeignKey("CustomerId")
-                        .IsRequired()
-                        .HasConstraintName("FK_TBL_CORPORATE_DIRECTOR_TBL_CUSTOMER");
-
-                    b.Navigation("Customer");
-                });
-
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblCorporateDocument", b =>
-                {
-                    b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblCustomer", "Customer")
-                        .WithMany("TblCorporateDocuments")
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblUser", "ReviewedByAdmin")
-                        .WithMany()
-                        .HasForeignKey("ReviewedByAdminId");
-
-                    b.Navigation("Customer");
-
-                    b.Navigation("ReviewedByAdmin");
-                });
-
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblCorporateSignatory", b =>
-                {
-                    b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblCustomer", "Customer")
-                        .WithMany("TblCorporateSignatories")
-                        .HasForeignKey("CustomerId")
-                        .IsRequired()
-                        .HasConstraintName("FK_CORPORATE_SIGNATORY_CUSTOMER");
 
                     b.Navigation("Customer");
                 });
@@ -2844,18 +2273,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.Navigation("Customer");
 
                     b.Navigation("RelationshipType");
-                });
-
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblNotification", b =>
-                {
-                    b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblCustomer", "Customer")
-                        .WithMany("TblNotifications")
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FK_TBL_NOTIFICATION_CUSTOMER");
-
-                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblPasswordReset", b =>
@@ -3096,12 +2513,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                 {
                     b.Navigation("TblCorporateContacts");
 
-                    b.Navigation("TblCorporateDirectors");
-
-                    b.Navigation("TblCorporateDocuments");
-
-                    b.Navigation("TblCorporateSignatories");
-
                     b.Navigation("TblCustomerAddressVerifications");
 
                     b.Navigation("TblCustomerBanks");
@@ -3109,8 +2520,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.Navigation("TblKycLogs");
 
                     b.Navigation("TblNextOfKins");
-
-                    b.Navigation("TblNotifications");
 
                     b.Navigation("TblWallets");
                 });

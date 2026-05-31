@@ -16,7 +16,10 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
             TblNextOfKins = new HashSet<TblNextOfKin>();
             TblWallets = new HashSet<TblWallet>();
             TblCustomerBanks = new HashSet<TblCustomerBank>();
-            TblCustomerAddressVerifications = new HashSet<TblCustomerAddressVerification>();
+            TblCorporateContacts = new HashSet<TblCorporateContact>();
+            TblCorporateDocuments = new HashSet<TblCorporateDocument>();
+            TblCorporateSignatories = new HashSet<TblCorporateSignatory>();
+            TblCorporateDirectors = new HashSet<TblCorporateDirector>();
         }
 
         [Key]
@@ -29,7 +32,7 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         [StringLength(150)]
         public string? OtherNames { get; set; }
         [Column(TypeName = "date")]
-        public DateTime DateOfBirth { get; set; }
+        public DateTime? DateOfBirth { get; set; }
         public int? Gender { get; set; }
         [Column("BVN")]
         [StringLength(11)]
@@ -63,12 +66,41 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public string? PhoneNumber { get; set; }
         public bool IsDeleted { get; set; }
         public bool? IsPolitcallyExposed { get; set; }
+        
+        public int? CustomerTypeId { get; set; }
+        [StringLength(250)]
+        public string? BusinessName { get; set; }
+        [StringLength(50)]
+        public string? RegistrationNumber { get; set; }
+        [StringLength(50)]
+        public string? TaxIdentificationNumber { get; set; }
+        [Column(TypeName = "date")]
+        public DateTime? DateOfIncorporation { get; set; }
+
+        [StringLength(250)]
+        public string? NatureOfBusiness { get; set; }
+        [StringLength(50)]
+        public string? EntityType { get; set; }
+        [StringLength(100)]
+        public string? OtherEntityType { get; set; }
+        [StringLength(100)]
+        public string? AnnualTurnover { get; set; }
+        [StringLength(250)]
+        public string? SourceOfFunds { get; set; }
+        [StringLength(50)]
+        public string? ClientSegmentation { get; set; }
+
         [Timestamp]
         public byte[] RowVersion { get; set; } = null!;
 
         [ForeignKey(nameof(UserId))]
         [InverseProperty(nameof(TblUser.TblCustomer))]
         public virtual TblUser User { get; set; } = null!;
+
+        [ForeignKey(nameof(CustomerTypeId))]
+        [InverseProperty(nameof(Entities.TblCustomerType.TblCustomers))]
+        public virtual TblCustomerType? CustomerType { get; set; }
+
         [InverseProperty(nameof(TblKycLog.Customer))]
         public virtual ICollection<TblKycLog> TblKycLogs { get; set; }
         [InverseProperty(nameof(TblNextOfKin.Customer))]
@@ -79,5 +111,14 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public virtual ICollection<TblCustomerBank> TblCustomerBanks { get; set; }
         [InverseProperty(nameof(TblCustomerAddressVerification.Customer))]
         public virtual ICollection<TblCustomerAddressVerification> TblCustomerAddressVerifications { get; set; }
+        [InverseProperty(nameof(TblCorporateContact.Customer))]
+        public virtual ICollection<TblCorporateContact> TblCorporateContacts { get; set; }
+        public virtual ICollection<TblCorporateDocument> TblCorporateDocuments { get; set; }
+        [InverseProperty(nameof(TblCorporateSignatory.Customer))]
+        public virtual ICollection<TblCorporateSignatory> TblCorporateSignatories { get; set; }
+        [InverseProperty(nameof(TblCorporateDirector.Customer))]
+        public virtual ICollection<TblCorporateDirector> TblCorporateDirectors { get; set; }
+        [InverseProperty(nameof(TblNotification.Customer))]
+        public virtual ICollection<TblNotification> TblNotifications { get; set; }
     }
 }

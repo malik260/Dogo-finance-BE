@@ -198,6 +198,39 @@ namespace DogoFinance.Api.Controllers
             var response = await _adminService.ReviewManualFundingRequest(request, long.Parse(userIdStr));
             return Ok(response);
         }
+        
+        // --- CORPORATE HUB ---
+        [HttpGet("corporate-registrations")]
+        public async Task<ActionResult<ApiResponse>> GetCorporateRegistrations()
+        {
+            var response = await _adminService.GetCorporateRegistrations();
+            return Ok(response);
+        }
+
+        [HttpPost("corporate-registrations/{customerId}/documents/{documentId}/review")]
+        public async Task<ActionResult<ApiResponse>> ReviewCorporateDocument(long customerId, long documentId, [FromBody] AdminCorporateDocumentReviewRequest request)
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
+
+            request.CustomerId = customerId;
+            request.DocumentId = documentId;
+
+            var response = await _adminService.ReviewCorporateDocument(request, long.Parse(userIdStr));
+            return Ok(response);
+        }
+
+        [HttpPost("corporate-registrations/{customerId}/review")]
+        public async Task<ActionResult<ApiResponse>> ReviewCorporateRegistration(long customerId, [FromBody] AdminCorporateRegistrationReviewRequest request)
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
+
+            request.CustomerId = customerId;
+
+            var response = await _adminService.ReviewCorporateRegistration(request, long.Parse(userIdStr));
+            return Ok(response);
+        }
     }
 
     public class CreateAdminRequest
