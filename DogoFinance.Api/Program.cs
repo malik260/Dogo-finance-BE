@@ -91,12 +91,15 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddDogoFinanceServices();
 
 // CORS for Frontend
+var allowedOrigins = builder.Configuration.GetSection("SystemConfig:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend",
-        policy => policy.AllowAnyOrigin()
+        policy => policy.WithOrigins(allowedOrigins)
                         .AllowAnyHeader()
-                        .AllowAnyMethod());
+                        .AllowAnyMethod()
+                        .AllowCredentials());
 });
 
 var app = builder.Build();
