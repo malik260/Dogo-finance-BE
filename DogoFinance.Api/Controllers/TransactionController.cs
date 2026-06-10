@@ -19,19 +19,22 @@ namespace DogoFinance.Api.Controllers
         private readonly ICustomerHoldingService _holdingService;
         private readonly ICustomerInvestmentService _investmentService;
         private readonly ITemporaryInvestmentService _tempInvestmentService;
+        private readonly DogoFinance.Integration.Interfaces.ICloudinaryService _cloudinaryService;
 
         public TransactionController(
             ITransactionService transactionService,
             ICustomerPortfolioService portfolioService,
             ICustomerHoldingService holdingService,
             ICustomerInvestmentService investmentService,
-            ITemporaryInvestmentService tempInvestmentService)
+            ITemporaryInvestmentService tempInvestmentService,
+            DogoFinance.Integration.Interfaces.ICloudinaryService cloudinaryService)
         {
             _transactionService = transactionService;
             _portfolioService = portfolioService;
             _holdingService = holdingService;
             _investmentService = investmentService;
             _tempInvestmentService = tempInvestmentService;
+            _cloudinaryService = cloudinaryService;
         }
 
         [HttpPost("invest")]
@@ -44,10 +47,16 @@ namespace DogoFinance.Api.Controllers
         }
 
         [HttpPost("manual-funding")]
-        public async Task<ActionResult<ApiResponse>> SubmitManualFunding([FromBody] ManualFundingRequestDto request)
+        public async Task<ActionResult<ApiResponse>> SubmitManualFunding([FromForm] ManualFundingRequestDto request)
         {
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
+
+            if (request.ReceiptFile != null)
+            {
+                var uploadResult = await _cloudinaryService.UploadImageAsync(request.ReceiptFile, "receipts");
+                request.ReceiptPath = uploadResult.Url;
+            }
 
             var response = await _transactionService.SubmitManualFundingRequest(long.Parse(userIdStr), request);
             return StatusCode(response.Status, response);

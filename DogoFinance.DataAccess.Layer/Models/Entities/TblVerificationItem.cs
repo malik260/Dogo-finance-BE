@@ -30,6 +30,8 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
 
         public int DisplayOrder { get; set; }
 
+        public bool RequiresUpload { get; set; } = true;
+
         public bool IsActive { get; set; } = true;
     }
 }

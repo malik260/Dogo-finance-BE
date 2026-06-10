@@ -66,13 +66,8 @@ namespace DogoFinance.Api.Extensions
             services.AddScoped<IPortfolioAllocationRuleService, PortfolioAllocationRuleService>();
             services.AddScoped<IInstrumentPriceService, InstrumentPriceService>();
 
-            // Register Report Services
-            services.AddScoped<ICustomerReportService, CustomerReportService>();
-
-            // Register individual repositories if needed (Fintrak often does both)
-            // services.AddScoped<IAccountRepository, AccountRepository>();
-
-            // Set global services for reference in DAL if needed
+           services.AddScoped<ICustomerReportService, CustomerReportService>();
+           
             GlobalContext.Services = services;
 
             return services;

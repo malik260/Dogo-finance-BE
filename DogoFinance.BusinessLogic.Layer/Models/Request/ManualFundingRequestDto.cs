@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
 
 namespace DogoFinance.BusinessLogic.Layer.Models.Request
 {
@@ -13,5 +14,7 @@ namespace DogoFinance.BusinessLogic.Layer.Models.Request
         public string Reference { get; set; } = null!;
 
         public string? ReceiptPath { get; set; }
+        
+        public IFormFile? ReceiptFile { get; set; }
     }
 }

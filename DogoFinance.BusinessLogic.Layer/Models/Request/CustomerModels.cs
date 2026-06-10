@@ -104,6 +104,7 @@ namespace DogoFinance.BusinessLogic.Layer.Models.Request
         public string Status { get; set; } = null!; // "verified", "pending", "unverified"
         public string Icon { get; set; } = null!;
         public string Date { get; set; } = "N/A";
+        public bool RequiresUpload { get; set; } = true;
     }
 
     public class UploadCorporateDocumentRequest

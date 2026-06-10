@@ -871,6 +871,7 @@ namespace DogoFinance.AdminManagement.Services
                         Type = d.DocumentType,
                         Status = d.Status?.ToLower(),
                         FileName = d.FilePath?.Split('/').Last() ?? "",
+                        FileUrl = d.FilePath,
                         FileSize = "N/A",
                         DateUploaded = d.UploadedAt.ToString("MMM dd, yyyy"),
                         Notes = d.AdminNotes

@@ -838,7 +838,8 @@ namespace DogoFinance.CustomerManagement.Services
                     Name = item.Name,
                     Type = item.Type,
                     Status = status,
-                    Icon = item.Icon ?? "ri-file-list-3-line"
+                    Icon = item.Icon ?? "ri-file-list-3-line",
+                    RequiresUpload = item.RequiresUpload
                 });
             }
 
