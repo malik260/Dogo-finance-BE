@@ -54,7 +54,9 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public string? City { get; set; }
         [StringLength(100)]
         public string? State { get; set; }
+        public int? StateId { get; set; }
         public int? Country { get; set; } = null!;
+        public int? CountryId { get; set; }
         [Column("KYCStatus")]
         public int Kycstatus { get; set; }
         [Column("KYCVerifiedAt")]
@@ -79,6 +81,7 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
 
         [StringLength(250)]
         public string? NatureOfBusiness { get; set; }
+        public int? NatureOfBusinessId { get; set; }
         [StringLength(50)]
         public string? EntityType { get; set; }
         [StringLength(100)]
@@ -90,6 +93,9 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         [StringLength(50)]
         public string? ClientSegmentation { get; set; }
 
+        [StringLength(50)]
+        public string? SignatoryMandate { get; set; }
+
         [Timestamp]
         public byte[] RowVersion { get; set; } = null!;
 
@@ -100,6 +106,15 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         [ForeignKey(nameof(CustomerTypeId))]
         [InverseProperty(nameof(Entities.TblCustomerType.TblCustomers))]
         public virtual TblCustomerType? CustomerType { get; set; }
+
+        [ForeignKey(nameof(CountryId))]
+        public virtual TblCountry? TblCountry { get; set; }
+
+        [ForeignKey(nameof(StateId))]
+        public virtual TblState? TblState { get; set; }
+
+        [ForeignKey(nameof(NatureOfBusinessId))]
+        public virtual TblNatureOfBusiness? TblNatureOfBusiness { get; set; }
 
         [InverseProperty(nameof(TblKycLog.Customer))]
         public virtual ICollection<TblKycLog> TblKycLogs { get; set; }

@@ -4,6 +4,7 @@ using DogoFinance.DataAccess.Layer.Models.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DogoFinance.DataAccess.Layer.Migrations
 {
     [DbContext(typeof(DogoFinanceContext))]
-    partial class DogoFinanceContextModelSnapshot : ModelSnapshot
+    [Migration("20260613095023_AddAddressAndNatureOfBusinessSplit")]
+    partial class AddAddressAndNatureOfBusinessSplit
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -297,9 +299,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DirectorId"), 1L, 1);
 
-                    b.Property<string>("AdminNotes")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("BusinessEmail")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -391,11 +390,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("SigningClass")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
@@ -476,9 +470,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SignatoryId"), 1L, 1);
 
-                    b.Property<string>("AdminNotes")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("BusinessEmail")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -519,8 +510,9 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                         .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("IdNumber")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("IdentityDocumentUrl")
                         .IsRequired()
@@ -575,11 +567,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<string>("Surname")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -593,14 +580,9 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<long?>("UserId")
-                        .HasColumnType("bigint");
-
                     b.HasKey("SignatoryId");
 
                     b.HasIndex("CustomerId");
-
-                    b.HasIndex("UserId");
 
                     b.ToTable("TBL_CORPORATE_SIGNATORY");
                 });
@@ -821,10 +803,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<string>("SignatoryMandate")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<string>("SourceOfFunds")
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)");
@@ -955,15 +933,8 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
-                    b.Property<int?>("BankCountryId")
+                    b.Property<int>("BankId")
                         .HasColumnType("int");
-
-                    b.Property<int?>("BankId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("BankName")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("BeneficiaryAccountName")
                         .HasMaxLength(250)
@@ -1019,8 +990,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.HasKey("CustomerBankId");
-
-                    b.HasIndex("BankCountryId");
 
                     b.HasIndex("BankId");
 
@@ -2105,65 +2074,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.ToTable("TBL_ROLE_ACCESS_RIGHT", (string)null);
                 });
 
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblSourceOfFund", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("TBL_SOURCE_OF_FUND");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            IsActive = true,
-                            Name = "Investment"
-                        },
-                        new
-                        {
-                            Id = 2,
-                            IsActive = true,
-                            Name = "Business Revenue"
-                        },
-                        new
-                        {
-                            Id = 3,
-                            IsActive = true,
-                            Name = "Personal Savings"
-                        },
-                        new
-                        {
-                            Id = 4,
-                            IsActive = true,
-                            Name = "Loan"
-                        },
-                        new
-                        {
-                            Id = 5,
-                            IsActive = true,
-                            Name = "Gift/Inheritance"
-                        },
-                        new
-                        {
-                            Id = 6,
-                            IsActive = true,
-                            Name = "Others"
-                        });
-                });
-
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblState", b =>
                 {
                     b.Property<int>("Id")
@@ -2312,44 +2222,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.HasIndex("ReversedTransactionId");
 
                     b.ToTable("TBL_TRANSACTION");
-                });
-
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblTransactionApproval", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"), 1L, 1);
-
-                    b.Property<DateTime?>("ActedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long>("ApproverUserId")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("RejectionReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<long>("TransactionId")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ApproverUserId");
-
-                    b.HasIndex("TransactionId");
-
-                    b.ToTable("TBL_TRANSACTION_APPROVAL");
                 });
 
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblTransactionType", b =>
@@ -2922,13 +2794,7 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                         .IsRequired()
                         .HasConstraintName("FK_CORPORATE_SIGNATORY_CUSTOMER");
 
-                    b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblUser", "User")
-                        .WithMany("TblCorporateSignatories")
-                        .HasForeignKey("UserId");
-
                     b.Navigation("Customer");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblCustomer", b =>
@@ -2991,13 +2857,10 @@ namespace DogoFinance.DataAccess.Layer.Migrations
 
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblCustomerBank", b =>
                 {
-                    b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblCountry", "BankCountry")
-                        .WithMany()
-                        .HasForeignKey("BankCountryId");
-
                     b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblBank", "Bank")
                         .WithMany("TblCustomerBanks")
                         .HasForeignKey("BankId")
+                        .IsRequired()
                         .HasConstraintName("FK_CUSTOMER_BANK_BANK");
 
                     b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblCustomer", "Customer")
@@ -3007,8 +2870,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                         .HasConstraintName("FK_CUSTOMER_BANK_CUSTOMER");
 
                     b.Navigation("Bank");
-
-                    b.Navigation("BankCountry");
 
                     b.Navigation("Customer");
                 });
@@ -3364,25 +3225,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                     b.Navigation("ReversedTransaction");
                 });
 
-            modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblTransactionApproval", b =>
-                {
-                    b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblUser", "ApproverUser")
-                        .WithMany("TblTransactionApprovals")
-                        .HasForeignKey("ApproverUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblTransaction", "Transaction")
-                        .WithMany("TblTransactionApprovals")
-                        .HasForeignKey("TransactionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ApproverUser");
-
-                    b.Navigation("Transaction");
-                });
-
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblUserRole", b =>
                 {
                     b.HasOne("DogoFinance.DataAccess.Layer.Models.Entities.TblRole", "Role")
@@ -3517,22 +3359,16 @@ namespace DogoFinance.DataAccess.Layer.Migrations
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblTransaction", b =>
                 {
                     b.Navigation("InverseReversedTransaction");
-
-                    b.Navigation("TblTransactionApprovals");
                 });
 
             modelBuilder.Entity("DogoFinance.DataAccess.Layer.Models.Entities.TblUser", b =>
                 {
-                    b.Navigation("TblCorporateSignatories");
-
                     b.Navigation("TblCustomer")
                         .IsRequired();
 
                     b.Navigation("TblPasswordResets");
 
                     b.Navigation("TblPayments");
-
-                    b.Navigation("TblTransactionApprovals");
 
                     b.Navigation("TblTransactionApprovedByUsers");
 

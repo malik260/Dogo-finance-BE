@@ -49,6 +49,8 @@ namespace DogoFinance.AdminManagement.Interfaces
         Task<ApiResponse> GetCorporateRegistrations();
         Task<ApiResponse> ReviewCorporateDocument(AdminCorporateDocumentReviewRequest request, long adminUserId);
         Task<ApiResponse> ReviewCorporateRegistration(AdminCorporateRegistrationReviewRequest request, long adminUserId);
+        Task<ApiResponse> ReviewCorporateDirector(long directorId, AdminCorporateMemberReviewRequest request, long adminUserId);
+        Task<ApiResponse> ReviewCorporateSignatory(long signatoryId, AdminCorporateMemberReviewRequest request, long adminUserId);
     }
 
     public class AdminWithdrawalReviewRequest
@@ -76,6 +78,12 @@ namespace DogoFinance.AdminManagement.Interfaces
     public class AdminCorporateRegistrationReviewRequest
     {
         public long CustomerId { get; set; }
+        public bool Approved { get; set; }
+        public string? AdminNotes { get; set; }
+    }
+
+    public class AdminCorporateMemberReviewRequest
+    {
         public bool Approved { get; set; }
         public string? AdminNotes { get; set; }
     }

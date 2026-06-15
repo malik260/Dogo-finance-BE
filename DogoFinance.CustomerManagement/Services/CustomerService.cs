@@ -503,6 +503,30 @@ namespace DogoFinance.CustomerManagement.Services
             return new ApiResponse { Success = true, Data = types, Message = "Document types retrieved", Boolean = true };
         }
 
+        public async Task<ApiResponse> GetCountries()
+        {
+            var items = await BaseRepository().FindList<TblCountry>(x => true);
+            return new ApiResponse { Success = true, Data = items, Message = "Countries retrieved", Boolean = true };
+        }
+
+        public async Task<ApiResponse> GetStates(int countryId)
+        {
+            var items = await BaseRepository().FindList<TblState>(x => x.CountryId == countryId);
+            return new ApiResponse { Success = true, Data = items, Message = "States retrieved", Boolean = true };
+        }
+
+        public async Task<ApiResponse> GetNatureOfBusinesses()
+        {
+            var items = await BaseRepository().FindList<TblNatureOfBusiness>(x => x.IsActive);
+            return new ApiResponse { Success = true, Data = items, Message = "Nature of businesses retrieved", Boolean = true };
+        }
+
+        public async Task<ApiResponse> GetSourceOfFunds()
+        {
+            var items = await BaseRepository().FindList<TblSourceOfFund>(x => x.IsActive);
+            return new ApiResponse { Success = true, Data = items, Message = "Source of funds retrieved", Boolean = true };
+        }
+
         public async Task<ApiResponse> InitiateAddressVerification(long customerId, AddressVerificationRequest request)
         {
             var response = new ApiResponse();
@@ -642,29 +666,41 @@ namespace DogoFinance.CustomerManagement.Services
 
         public async Task<ApiResponse> GetCorporateProfile(long userId)
         {
-            var customer = await _uow.Customers.GetByUserId(userId);
-            if (customer == null) return new ApiResponse { Message = "Profile not found", Status = 404 };
-
-            var user = await _uow.Users.GetById(userId);
-
-            var profile = new
+            try
             {
-                CompanyName = customer.BusinessName,
-                customer.RegistrationNumber,
-                customer.DateOfIncorporation,
-                customer.NatureOfBusiness,
-                customer.Address,
-                customer.EntityType,
-                customer.OtherEntityType,
-                Phone = customer.PhoneNumber,
-                Tin = customer.TaxIdentificationNumber,
-                Email = user?.Email,
-                customer.AnnualTurnover,
-                customer.SourceOfFunds,
-                customer.ClientSegmentation
-            };
+                var customer = await _uow.Customers.GetByUserId(userId);
+                if (customer == null) return new ApiResponse { Message = "Profile not found", Status = 404 };
 
-            return new ApiResponse { Success = true, Data = profile, Message = "Corporate profile retrieved", Boolean = true };
+                var user = await _uow.Users.GetById(userId);
+
+                var profile = new
+                {
+                    CompanyName = customer.BusinessName,
+                    customer.RegistrationNumber,
+                    customer.DateOfIncorporation,
+                    customer.NatureOfBusinessId,
+                    customer.CountryId,
+                    customer.StateId,
+                    customer.City,
+                    customer.Address,
+                    customer.EntityType,
+                    customer.OtherEntityType,
+                    Phone = customer.PhoneNumber,
+                    Tin = customer.TaxIdentificationNumber,
+                    Email = user?.Email,
+                    customer.AnnualTurnover,
+                    customer.SourceOfFunds,
+                    customer.ClientSegmentation,
+                    customer.SignatoryMandate
+                };
+
+                return new ApiResponse { Success = true, Data = profile, Message = "Corporate profile retrieved", Boolean = true };
+            }
+            catch (Exception ex)
+            {
+
+                throw;
+            }
         }
 
         public async Task<ApiResponse> UpdateCorporateProfile(long userId, UpdateCorporateProfileRequest request)
@@ -685,7 +721,10 @@ namespace DogoFinance.CustomerManagement.Services
             }
             if (!string.IsNullOrEmpty(request.RegistrationNumber)) customer.RegistrationNumber = request.RegistrationNumber;
             if (request.DateOfIncorporation.HasValue) customer.DateOfIncorporation = request.DateOfIncorporation;
-            if (!string.IsNullOrEmpty(request.NatureOfBusiness)) customer.NatureOfBusiness = request.NatureOfBusiness;
+            if (request.NatureOfBusinessId.HasValue) customer.NatureOfBusinessId = request.NatureOfBusinessId;
+            if (request.CountryId.HasValue) customer.CountryId = request.CountryId;
+            if (request.StateId.HasValue) customer.StateId = request.StateId;
+            if (!string.IsNullOrEmpty(request.City)) customer.City = request.City;
             if (!string.IsNullOrEmpty(request.Address)) customer.Address = request.Address;
             if (!string.IsNullOrEmpty(request.EntityType)) customer.EntityType = request.EntityType;
             if (!string.IsNullOrEmpty(request.OtherEntityType)) customer.OtherEntityType = request.OtherEntityType;
@@ -693,6 +732,19 @@ namespace DogoFinance.CustomerManagement.Services
             if (!string.IsNullOrEmpty(request.AnnualTurnover)) customer.AnnualTurnover = request.AnnualTurnover;
             if (!string.IsNullOrEmpty(request.SourceOfFunds)) customer.SourceOfFunds = request.SourceOfFunds;
             if (!string.IsNullOrEmpty(request.ClientSegmentation)) customer.ClientSegmentation = request.ClientSegmentation;
+            
+            if (!string.IsNullOrEmpty(request.SignatoryMandate) && customer.SignatoryMandate != request.SignatoryMandate)
+            {
+                var existingSignatories = await _uow.GenericRepository.FindList<TblCorporateSignatory>(s => s.CustomerId == customer.CustomerId && !s.IsDeleted);
+                int currentCount = existingSignatories.Count();
+
+                if (request.SignatoryMandate == "Sole" && currentCount > 1)
+                {
+                    return new ApiResponse { Success = false, Message = $"You cannot select 'Sole' because you have {currentCount} active signatories. Please remove extra signatories first.", Status = 400 };
+                }
+                
+                customer.SignatoryMandate = request.SignatoryMandate;
+            }
 
             if (!string.IsNullOrEmpty(request.Phone) && request.Phone != user.PhoneNumber)
             {
@@ -809,19 +861,34 @@ namespace DogoFinance.CustomerManagement.Services
                             break;
                         case "CheckSignatoryPhotos":
                             // Item 3: Verified if there is at least one signatory (passport photo is required to add one)
-                            var hasSignatories = await _uow.GenericRepository.FindList<TblCorporateSignatory>(s => s.CustomerId == customer.CustomerId);
-                            status = hasSignatories.Any() ? "verified" : "unverified";
+                            var hasSignatories = await _uow.GenericRepository.FindList<TblCorporateSignatory>(s => s.CustomerId == customer.CustomerId && !s.IsDeleted);
+                            if (!hasSignatories.Any())
+                                status = "unverified";
+                            else if (hasSignatories.All(x => x.Status.ToLower() == "verified"))
+                                status = "verified";
+                            else
+                                status = "pending";
                             break;
                         case "CheckDirectorsAdded":
                             // Item 6: Verified if there is at least one director
-                            var hasDirectors = await _uow.GenericRepository.FindList<TblCorporateDirector>(d => d.CustomerId == customer.CustomerId);
-                            status = hasDirectors.Any() ? "verified" : "unverified";
+                            var hasDirectors = await _uow.GenericRepository.FindList<TblCorporateDirector>(d => d.CustomerId == customer.CustomerId && !d.IsDeleted);
+                            if (!hasDirectors.Any())
+                                status = "unverified";
+                            else if (hasDirectors.All(x => x.Status.ToLower() == "verified"))
+                                status = "verified";
+                            else
+                                status = "pending";
                             break;
                         case "CheckSignatoryDirectorsId":
                             // Item 8: Verified if there is at least one signatory and one director (ID document is required for both)
-                            var sigs = await _uow.GenericRepository.FindList<TblCorporateSignatory>(s => s.CustomerId == customer.CustomerId);
-                            var dirs = await _uow.GenericRepository.FindList<TblCorporateDirector>(d => d.CustomerId == customer.CustomerId);
-                            status = (sigs.Any() && dirs.Any()) ? "verified" : "unverified";
+                            var sigs = await _uow.GenericRepository.FindList<TblCorporateSignatory>(s => s.CustomerId == customer.CustomerId && !s.IsDeleted);
+                            var dirs = await _uow.GenericRepository.FindList<TblCorporateDirector>(d => d.CustomerId == customer.CustomerId && !d.IsDeleted);
+                            if (!sigs.Any() && !dirs.Any())
+                                status = "unverified";
+                            else if (sigs.Any() && dirs.Any() && sigs.All(x => x.Status.ToLower() == "verified") && dirs.All(x => x.Status.ToLower() == "verified"))
+                                status = "verified";
+                            else
+                                status = "pending";
                             break;
                         default:
                             status = "unverified";
@@ -889,6 +956,22 @@ namespace DogoFinance.CustomerManagement.Services
                 if (customer == null)
                     return new ApiResponse { Success = false, Message = "Customer not found", Status = 404 };
 
+                // Validate based on mandate
+                if (!string.IsNullOrEmpty(customer.SignatoryMandate))
+                {
+                    var existingSignatories = await _uow.GenericRepository.FindList<TblCorporateSignatory>(s => s.CustomerId == customer.CustomerId && !s.IsDeleted);
+                    int currentCount = existingSignatories.Count();
+
+                    if (customer.SignatoryMandate == "Sole" && currentCount >= 1)
+                    {
+                        return new ApiResponse { Success = false, Message = "Your mandate is set to 'Sole'. You must change your mandate before adding another signatory.", Status = 400 };
+                    }
+                    if ((customer.SignatoryMandate == "Either to sign" || customer.SignatoryMandate == "Both to sign") && currentCount >= 2)
+                    {
+                        return new ApiResponse { Success = false, Message = $"Your mandate is set to '{customer.SignatoryMandate}'. You cannot add more than 2 signatories.", Status = 400 };
+                    }
+                }
+
                 // Upload files to Cloudinary
                 var (passportUrl, _) = await _cloudinaryService.UploadImageAsync(request.PassportPhoto, "signatories/passports");
                 var (signatureUrl, _) = await _cloudinaryService.UploadImageAsync(request.SignatureCard, "signatories/signatures");
@@ -923,7 +1006,8 @@ namespace DogoFinance.CustomerManagement.Services
                     PassportPhotoUrl = passportUrl,
                     SignatureCardUrl = signatureUrl,
                     IdentityDocumentUrl = idDocUrl,
-                    IsActive = true
+                    IsActive = false,
+                    Status = "Pending"
                 };
 
                 await _uow.GenericRepository.Insert(signatory);
@@ -931,7 +1015,7 @@ namespace DogoFinance.CustomerManagement.Services
                 return new ApiResponse
                 {
                     Success = true,
-                    Message = "Signatory added successfully",
+                    Message = "Signatory added successfully and is pending admin approval",
                     Data = signatory
                 };
             }
@@ -971,6 +1055,17 @@ namespace DogoFinance.CustomerManagement.Services
             signatory.IsDeleted = true;
             signatory.DeletedAt = DateTime.UtcNow;
             await _uow.GenericRepository.Update(signatory);
+
+            if (signatory.UserId.HasValue)
+            {
+                var signatoryUser = await _uow.GenericRepository.FindEntity<TblUser>(u => u.UserId == signatory.UserId.Value);
+                if (signatoryUser != null)
+                {
+                    signatoryUser.IsDeleted = true;
+                    // Note: If TblUser doesn't have DeletedAt, just IsDeleted = true is sufficient
+                    await _uow.GenericRepository.Update(signatoryUser);
+                }
+            }
 
             return new ApiResponse
             {
@@ -1018,7 +1113,8 @@ namespace DogoFinance.CustomerManagement.Services
                 PassportPhotoUrl = passportUrl,
                 SignatureCardUrl = signatureUrl,
                 IdentityDocumentUrl = idDocUrl,
-                IsActive = true
+                IsActive = false,
+                Status = "Pending"
             };
 
             await _uow.GenericRepository.Insert(director);

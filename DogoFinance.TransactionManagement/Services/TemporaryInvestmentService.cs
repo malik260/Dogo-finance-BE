@@ -438,15 +438,33 @@ namespace DogoFinance.TransactionManagement.Services
                         case "CheckAppForm": status = appFormVerified ? "verified" : "unverified"; break;
                         case "CheckBankLinked": status = hasBank ? "verified" : "unverified"; break;
                         case "CheckSignatoryPhotos":
-                            var hasSignatories = await _uow.GenericRepository.FindList<TblCorporateSignatory>(s => s.CustomerId == customerId);
-                            status = hasSignatories.Any() ? "verified" : "unverified"; break;
+                            var hasSignatories = await _uow.GenericRepository.FindList<TblCorporateSignatory>(s => s.CustomerId == customerId && !s.IsDeleted);
+                            if (!hasSignatories.Any())
+                                status = "unverified";
+                            else if (hasSignatories.All(x => x.Status.ToLower() == "approved"))
+                                status = "verified";
+                            else
+                                status = "pending";
+                            break;
                         case "CheckDirectorsAdded":
-                            var hasDirectors = await _uow.GenericRepository.FindList<TblCorporateDirector>(d => d.CustomerId == customerId);
-                            status = hasDirectors.Any() ? "verified" : "unverified"; break;
+                            var hasDirectors = await _uow.GenericRepository.FindList<TblCorporateDirector>(d => d.CustomerId == customerId && !d.IsDeleted);
+                            if (!hasDirectors.Any())
+                                status = "unverified";
+                            else if (hasDirectors.All(x => x.Status.ToLower() == "approved"))
+                                status = "verified";
+                            else
+                                status = "pending";
+                            break;
                         case "CheckSignatoryDirectorsId":
-                            var sigs = await _uow.GenericRepository.FindList<TblCorporateSignatory>(s => s.CustomerId == customerId);
-                            var dirs = await _uow.GenericRepository.FindList<TblCorporateDirector>(d => d.CustomerId == customerId);
-                            status = (sigs.Any() && dirs.Any()) ? "verified" : "unverified"; break;
+                            var sigs = await _uow.GenericRepository.FindList<TblCorporateSignatory>(s => s.CustomerId == customerId && !s.IsDeleted);
+                            var dirs = await _uow.GenericRepository.FindList<TblCorporateDirector>(d => d.CustomerId == customerId && !d.IsDeleted);
+                            if (!sigs.Any() && !dirs.Any())
+                                status = "unverified";
+                            else if (sigs.Any() && dirs.Any() && sigs.All(x => x.Status.ToLower() == "approved") && dirs.All(x => x.Status.ToLower() == "approved"))
+                                status = "verified";
+                            else
+                                status = "pending";
+                            break;
                     }
                 }
                 else

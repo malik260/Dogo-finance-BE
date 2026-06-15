@@ -72,6 +72,11 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
 
         public bool IsActive { get; set; }
 
+        [StringLength(50)]
+        public string Status { get; set; } = "Pending";
+
+        public string? AdminNotes { get; set; }
+
         public DateTime CreatedAt { get; set; }
 
         public DateTime? UpdatedAt { get; set; }

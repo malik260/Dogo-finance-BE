@@ -231,6 +231,26 @@ namespace DogoFinance.Api.Controllers
             var response = await _adminService.ReviewCorporateRegistration(request, long.Parse(userIdStr));
             return Ok(response);
         }
+
+        [HttpPost("corporate-registrations/directors/{directorId}/review")]
+        public async Task<ActionResult<ApiResponse>> ReviewCorporateDirector(long directorId, [FromBody] AdminCorporateMemberReviewRequest request)
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
+
+            var response = await _adminService.ReviewCorporateDirector(directorId, request, long.Parse(userIdStr));
+            return Ok(response);
+        }
+
+        [HttpPost("corporate-registrations/signatories/{signatoryId}/review")]
+        public async Task<ActionResult<ApiResponse>> ReviewCorporateSignatory(long signatoryId, [FromBody] AdminCorporateMemberReviewRequest request)
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
+
+            var response = await _adminService.ReviewCorporateSignatory(signatoryId, request, long.Parse(userIdStr));
+            return Ok(response);
+        }
     }
 
     public class CreateAdminRequest

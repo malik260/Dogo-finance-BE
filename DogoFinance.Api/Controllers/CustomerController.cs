@@ -41,8 +41,39 @@ namespace DogoFinance.Api.Controllers
         public async Task<ActionResult<ApiResponse>> GetCustomerTypes()
         {
             var response = await _customerService.GetCustomerTypes();
-            if (response.Boolean) return Ok(response);
-            return StatusCode(response.Status, response);
+            return Ok(response);
+        }
+
+        [HttpGet("countries")]
+        [AllowAnonymous]
+        public async Task<ActionResult<ApiResponse>> GetCountries()
+        {
+            var response = await _customerService.GetCountries();
+            return Ok(response);
+        }
+
+        [HttpGet("states/{countryId}")]
+        [AllowAnonymous]
+        public async Task<ActionResult<ApiResponse>> GetStates(int countryId)
+        {
+            var response = await _customerService.GetStates(countryId);
+            return Ok(response);
+        }
+
+        [HttpGet("nature-of-businesses")]
+        [AllowAnonymous]
+        public async Task<ActionResult<ApiResponse>> GetNatureOfBusinesses()
+        {
+            var response = await _customerService.GetNatureOfBusinesses();
+            return Ok(response);
+        }
+
+        [HttpGet("source-of-funds")]
+        [AllowAnonymous]
+        public async Task<ActionResult<ApiResponse>> GetSourceOfFunds()
+        {
+            var response = await _customerService.GetSourceOfFunds();
+            return Ok(response);
         }
 
         [AllowAnonymous]

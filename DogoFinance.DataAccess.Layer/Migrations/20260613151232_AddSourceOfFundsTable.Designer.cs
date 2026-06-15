@@ -4,6 +4,7 @@ using DogoFinance.DataAccess.Layer.Models.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DogoFinance.DataAccess.Layer.Migrations
 {
     [DbContext(typeof(DogoFinanceContext))]
-    partial class DogoFinanceContextModelSnapshot : ModelSnapshot
+    [Migration("20260613151232_AddSourceOfFundsTable")]
+    partial class AddSourceOfFundsTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -297,9 +299,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DirectorId"), 1L, 1);
 
-                    b.Property<string>("AdminNotes")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("BusinessEmail")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -395,11 +394,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<string>("Surname")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -475,9 +469,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SignatoryId"), 1L, 1);
-
-                    b.Property<string>("AdminNotes")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("BusinessEmail")
                         .IsRequired()
@@ -571,11 +562,6 @@ namespace DogoFinance.DataAccess.Layer.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("SigningClass")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");

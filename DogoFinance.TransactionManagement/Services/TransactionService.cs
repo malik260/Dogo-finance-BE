@@ -637,9 +637,89 @@ namespace DogoFinance.TransactionManagement.Services
                 decimal threshold = settings?.WithdrawalAutoThreshold ?? 50000;
                 bool needsApproval = request.Amount > threshold;
 
+                bool isCorporate = customer.CustomerTypeId == 2;
+
                 var reference = $"WD_{DateTime.UtcNow.Ticks}";
 
-                if (needsApproval)
+                if (isCorporate && !string.IsNullOrEmpty(customer.SignatoryMandate))
+                {
+                    // Fetch active signatories linked to user accounts
+                    var signatories = await _uow.GenericRepository.AsQueryable<TblCorporateSignatory>(s => s.CustomerId == customer.CustomerId && !s.IsDeleted && s.UserId != null).ToListAsync();
+                    if (!signatories.Any())
+                    {
+                        await _uow.RollbackAsync();
+                        return new ApiResponse { Message = "No registered signatories found to approve this transaction.", Status = 400 };
+                    }
+
+                    // Create Admin Review Record for the Maker
+                    var withdrawalReq = new TblWithdrawalRequest
+                    {
+                        CustomerId = customer.CustomerId,
+                        Amount = request.Amount,
+                        Status = "Pending Signatories",
+                        Reference = reference,
+                        Narration = (request.Narration ?? "Corporate Withdrawal") + " (Pending Signatures)",
+                        BankCode = request.BankCode,
+                        AccountNumber = request.AccountNumber,
+                        InitiatedAt = DateTime.UtcNow
+                    };
+                    await _uow.GenericRepository.Insert(withdrawalReq);
+
+                    // Create Transaction record for user visibility
+                    var pendingTransaction = new TblTransaction
+                    {
+                        Reference = reference,
+                        TransactionType = TransactionType.WITHDRAWAL,
+                        Amount = request.Amount,
+                        Status = 0, // PENDING
+                        Narration = withdrawalReq.Narration,
+                        InitiatedByUserId = customer.UserId,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _uow.Transactions.CreateTransaction(pendingTransaction);
+
+                    // Create Approval Records
+                    // Logic based on mandate (Sole, Either to sign, Both to sign, Any 2 to sign)
+                    foreach (var sig in signatories)
+                    {
+                        var approval = new TblTransactionApproval
+                        {
+                            TransactionId = pendingTransaction.TransactionId,
+                            ApproverUserId = sig.UserId.Value,
+                            Status = "Pending",
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _uow.GenericRepository.Insert(approval);
+
+                        // System Notification
+                        var notification = new TblNotification
+                        {
+                            CustomerId = customer.CustomerId, // or maybe sig.CustomerId if they are linked
+                            Title = "Action Required: Pending Withdrawal",
+                            Message = $"A withdrawal of {request.Amount:N2} has been initiated for {customer.BusinessName ?? customer.FirstName} and requires your approval.",
+                            IsRead = false,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _uow.GenericRepository.Insert(notification);
+
+                        // Email Notification
+                        string subject = "Action Required: Pending Corporate Withdrawal";
+                        string body = $@"
+                        <p>Dear {sig.FirstName} {sig.Surname},</p>
+                        <p>A withdrawal of <strong>{request.Amount:N2}</strong> has been initiated on the account of <strong>{customer.BusinessName ?? customer.FirstName}</strong>.</p>
+                        <p>As an authorized signatory, your approval is required to process this transaction.</p>
+                        <p>Please log in to the Corporate Portal to review and approve or reject this request.</p>
+                        <br/>
+                        <p>Regards,<br/>Dogo Finance Team</p>";
+                        
+                        // Fire and forget email or await it
+                        _ = _emailService.SendEmail(sig.BusinessEmail, subject, body);
+                    }
+
+                    await _uow.CommitAsync();
+                    return new ApiResponse { Success = true, Message = "Withdrawal initiated. Awaiting signatory approvals.", Status = 200 };
+                }
+                else if (needsApproval)
                 {
                     // Create Admin Review Record
                     var withdrawalReq = new TblWithdrawalRequest
@@ -782,9 +862,196 @@ namespace DogoFinance.TransactionManagement.Services
             return new ApiResponse { Message = "OTP verified successfuly", Success = true, Status = 200 };
         }
 
+        public async Task<ApiResponse> GetPendingApprovals(long userId)
+        {
+            var approvals = await _uow.GenericRepository.AsQueryable<TblTransactionApproval>(a => a.ApproverUserId == userId && a.Status == "Pending")
+                .Include(a => a.Transaction)
+                .OrderByDescending(a => a.CreatedAt)
+                .ToListAsync();
+
+            var data = approvals.Select(a => new
+            {
+                a.Id,
+                a.TransactionId,
+                a.Status,
+                a.CreatedAt,
+                Transaction = new
+                {
+                    a.Transaction.Amount,
+                    a.Transaction.Reference,
+                    a.Transaction.Narration,
+                    a.Transaction.CreatedAt
+                }
+            });
+
+            return new ApiResponse { Success = true, Data = data, Status = 200 };
+        }
+
+        public async Task<ApiResponse> ProcessTransactionApproval(long userId, long transactionId, bool isApproved, string pin)
+        {
+            await _uow.BeginTransactionAsync();
+            try
+            {
+                var user = await _uow.GenericRepository.FindEntity<TblUser>(userId);
+                if (user == null) return new ApiResponse { Message = "User not found", Status = 404 };
+
+                if (!HashHelper.VerifyHash(pin, user.TransactionPinHash!, user.TransactionPinSalt!))
+                {
+                    await _uow.RollbackAsync();
+                    return new ApiResponse { Message = "Incorrect transaction PIN.", Status = 401 };
+                }
+
+                var approval = await _uow.GenericRepository.FindEntity<TblTransactionApproval>(a => a.ApproverUserId == userId && a.TransactionId == transactionId && a.Status == "Pending");
+                if (approval == null)
+                {
+                    await _uow.RollbackAsync();
+                    return new ApiResponse { Message = "Pending approval request not found or already processed.", Status = 404 };
+                }
+
+                var transaction = await _uow.GenericRepository.FindEntity<TblTransaction>(transactionId);
+                if (transaction == null || transaction.Status != 0) // 0 is Pending
+                {
+                    await _uow.RollbackAsync();
+                    return new ApiResponse { Message = "Transaction is not in a pending state.", Status = 400 };
+                }
+
+                // Get the initiator user to figure out the customer mandate
+                var initiator = await _uow.GenericRepository.FindEntity<TblUser>(transaction.InitiatedByUserId);
+                var customer = await _uow.GenericRepository.FindEntity<TblCustomer>(c => c.UserId == initiator.UserId);
+
+                if (customer == null)
+                {
+                    await _uow.RollbackAsync();
+                    return new ApiResponse { Message = "Originating customer not found.", Status = 404 };
+                }
+
+                if (!isApproved)
+                {
+                    // Rejection logic: abort the entire transaction
+                    approval.Status = "Rejected";
+                    approval.ActedAt = DateTime.UtcNow;
+                    await _uow.GenericRepository.Update(approval);
+
+                    transaction.Status = 2; // FAILED/REJECTED
+                    await _uow.GenericRepository.Update(transaction);
+
+                    // Update withdrawal request to rejected
+                    var withdrawalReq = await _uow.GenericRepository.FindEntity<TblWithdrawalRequest>(w => w.Reference == transaction.Reference);
+                    if (withdrawalReq != null)
+                    {
+                        withdrawalReq.Status = "Rejected";
+                        await _uow.GenericRepository.Update(withdrawalReq);
+                    }
+
+                    // Cancel other pending approvals
+                    var otherApprovals = await _uow.GenericRepository.AsQueryable<TblTransactionApproval>(a => a.TransactionId == transactionId && a.Status == "Pending").ToListAsync();
+                    foreach (var other in otherApprovals)
+                    {
+                        other.Status = "Cancelled";
+                        await _uow.GenericRepository.Update(other);
+                    }
+
+                    await _uow.CommitAsync();
+
+                    return new ApiResponse { Success = true, Message = "Transaction rejected successfully.", Status = 200 };
+                }
+
+                // Approval logic
+                approval.Status = "Approved";
+                approval.ActedAt = DateTime.UtcNow;
+                await _uow.GenericRepository.Update(approval);
+
+                // Check if mandate threshold is met
+                var allApprovals = await _uow.GenericRepository.AsQueryable<TblTransactionApproval>(a => a.TransactionId == transactionId).ToListAsync();
+                int approvedCount = allApprovals.Count(a => a.Status == "Approved");
+
+                int requiredSignatures = 1; // Default
+                string mandate = customer.SignatoryMandate ?? "Sole";
+                if (mandate == "Both to sign" || mandate == "Any 2 to sign")
+                {
+                    requiredSignatures = 2;
+                }
+
+                if (approvedCount >= requiredSignatures)
+                {
+                    // Threshold met. Proceed to execute transaction.
+                    var wallet = await _uow.Wallets.GetByCustomerId(customer.CustomerId);
+                    if (wallet == null || wallet.Balance < transaction.Amount)
+                    {
+                        await _uow.RollbackAsync();
+                        return new ApiResponse { Message = "Insufficient balance in customer account.", Status = 400 };
+                    }
+
+                    wallet.Balance -= transaction.Amount;
+                    await _uow.Wallets.UpdateWallet(wallet);
+
+                    transaction.Status = 1; // SUCCESS
+                    await _uow.GenericRepository.Update(transaction);
+
+                    var withdrawalReq = await _uow.GenericRepository.FindEntity<TblWithdrawalRequest>(w => w.Reference == transaction.Reference);
+                    if (withdrawalReq != null)
+                    {
+                        withdrawalReq.Status = "Approved";
+                        await _uow.GenericRepository.Update(withdrawalReq);
+                    }
+
+                    await LogLedger(transaction.TransactionId, wallet.WalletId, 2, transaction.Amount, wallet.Balance, transaction.Narration);
+
+                    // Update any remaining pending approvals to "Cancelled"
+                    foreach (var other in allApprovals.Where(a => a.Status == "Pending"))
+                    {
+                        other.Status = "Cancelled";
+                        await _uow.GenericRepository.Update(other);
+                    }
+
+                    await _uow.CommitAsync();
+
+                    // Notify signatories of completion
+                    var signatories = await _uow.GenericRepository.AsQueryable<TblCorporateSignatory>(s => s.CustomerId == customer.CustomerId && !s.IsDeleted).ToListAsync();
+                    foreach (var sig in signatories)
+                    {
+                        string subject = "Transaction Completed: Corporate Withdrawal";
+                        string body = $@"
+                        <p>Dear {sig.FirstName} {sig.Surname},</p>
+                        <p>The withdrawal of <strong>{transaction.Amount:N2}</strong> on the account of <strong>{customer.BusinessName ?? customer.FirstName}</strong> has been fully approved and successfully processed.</p>
+                        <br/>
+                        <p>Regards,<br/>Dogo Finance Team</p>";
+                        _ = _emailService.SendEmail(sig.BusinessEmail, subject, body);
+                    }
+
+                    return new ApiResponse { Success = true, Message = "Transaction fully approved and processed successfully.", Status = 200 };
+                }
+                else
+                {
+                    await _uow.CommitAsync();
+                    return new ApiResponse { Success = true, Message = "Approval recorded. Awaiting further signatures.", Status = 200 };
+                }
+            }
+            catch (Exception ex)
+            {
+                await _uow.RollbackAsync();
+                _logger.LogError(ex, "Error processing transaction approval");
+                return new ApiResponse { Message = "An error occurred while processing approval", Status = 500 };
+            }
+        }
+
         public async Task<ApiResponse> GetTransactionHistory(long userId)
         {
             var customer = await _uow.Customers.GetByUserId(userId);
+            
+            if (customer == null)
+            {
+                var signatory = await _uow.GenericRepository.FindEntity<TblCorporateSignatory>(s => s.UserId == userId && !s.IsDeleted);
+                if (signatory != null)
+                {
+                    customer = await _uow.GenericRepository.FindEntity<TblCustomer>(signatory.CustomerId);
+                    if (customer != null)
+                    {
+                        userId = customer.UserId;
+                    }
+                }
+            }
+
             var walletHistory = await _uow.Transactions.GetByUserId(userId);
             
             var historyList = walletHistory.Select(t => new {

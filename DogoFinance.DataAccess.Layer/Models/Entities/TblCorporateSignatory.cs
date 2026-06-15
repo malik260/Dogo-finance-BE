@@ -56,10 +56,12 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         [StringLength(50)]
         public string IdentityType { get; set; } = null!;
 
-        [StringLength(100)]
-        public string IdNumber { get; set; } = null!;
+        [StringLength(255)]
+        public string? IdNumber { get; set; }
 
         public bool IsPep { get; set; }
+
+        public long? UserId { get; set; }
 
         [StringLength(500)]
         public string PassportPhotoUrl { get; set; } = null!;
@@ -72,6 +74,11 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
 
         public bool IsActive { get; set; }
 
+        [StringLength(50)]
+        public string Status { get; set; } = "Pending";
+
+        public string? AdminNotes { get; set; }
+
         public DateTime CreatedAt { get; set; }
 
         public DateTime? UpdatedAt { get; set; }
@@ -80,8 +87,12 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
 
         public bool IsDeleted { get; set; }
 
-        [ForeignKey("CustomerId")]
-        [InverseProperty("TblCorporateSignatories")]
+        [ForeignKey(nameof(CustomerId))]
+        [InverseProperty(nameof(TblCustomer.TblCorporateSignatories))]
         public virtual TblCustomer Customer { get; set; } = null!;
+
+        [ForeignKey(nameof(UserId))]
+        [InverseProperty(nameof(TblUser.TblCorporateSignatories))]
+        public virtual TblUser? User { get; set; }
     }
 }

@@ -68,7 +68,10 @@ namespace DogoFinance.BusinessLogic.Layer.Models.Request
         public string? CompanyName { get; set; }
         public string? RegistrationNumber { get; set; }
         public DateTime? DateOfIncorporation { get; set; }
-        public string? NatureOfBusiness { get; set; }
+        public int? NatureOfBusinessId { get; set; }
+        public int? CountryId { get; set; }
+        public int? StateId { get; set; }
+        public string? City { get; set; }
         public string? Address { get; set; }
         public string? EntityType { get; set; }
         public string? OtherEntityType { get; set; }
@@ -78,6 +81,7 @@ namespace DogoFinance.BusinessLogic.Layer.Models.Request
         public string? AnnualTurnover { get; set; }
         public string? SourceOfFunds { get; set; }
         public string? ClientSegmentation { get; set; }
+        public string? SignatoryMandate { get; set; }
     }
 
     public class UpdateCorporateContactRequest

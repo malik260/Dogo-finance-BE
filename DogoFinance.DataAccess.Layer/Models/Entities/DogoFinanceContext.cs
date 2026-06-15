@@ -53,8 +53,12 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public virtual DbSet<TblVerificationItem> TblVerificationItems { get; set; } = null!;
         public virtual DbSet<TblCorporateSignatory> TblCorporateSignatories { get; set; } = null!;
         public virtual DbSet<TblCorporateDirector> TblCorporateDirectors { get; set; } = null!;
+        public virtual DbSet<TblTransactionApproval> TblTransactionApprovals { get; set; } = null!;
         public virtual DbSet<TblNotification> TblNotifications { get; set; } = null!;
-
+        public virtual DbSet<TblCountry> TblCountries { get; set; } = null!;
+        public virtual DbSet<TblState> TblStates { get; set; } = null!;
+        public virtual DbSet<TblNatureOfBusiness> TblNatureOfBusinesses { get; set; } = null!;
+        public virtual DbSet<TblSourceOfFund> TblSourceOfFunds { get; set; } = null!;
 
         // Portfolio Management
         public virtual DbSet<TblAssetClass> TblAssetClasses { get; set; } = null!;
@@ -105,6 +109,21 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
 
                 entity.Property(e => e.CustomerTypeId).HasDefaultValueSql("((1))");
                 entity.Property(e => e.Country).HasDefaultValueSql("('Nigeria')");
+
+                entity.HasOne(d => d.TblCountry)
+                    .WithMany()
+                    .HasForeignKey(d => d.CountryId)
+                    .HasConstraintName("FK_TBL_CUSTOMER_COUNTRY");
+
+                entity.HasOne(d => d.TblState)
+                    .WithMany()
+                    .HasForeignKey(d => d.StateId)
+                    .HasConstraintName("FK_TBL_CUSTOMER_STATE");
+
+                entity.HasOne(d => d.TblNatureOfBusiness)
+                    .WithMany()
+                    .HasForeignKey(d => d.NatureOfBusinessId)
+                    .HasConstraintName("FK_TBL_CUSTOMER_NATUREOFBUSINESS");
 
                 entity.HasOne(d => d.CustomerType)
                     .WithMany(p => p.TblCustomers)
@@ -315,6 +334,48 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
                 entity.HasData(
                     new TblCustomerType { Id = 1, Name = "Individual", Description = "Individual Customer Account", IsActive = true },
                     new TblCustomerType { Id = 2, Name = "Corporate", Description = "Corporate/Business Account", IsActive = true }
+                );
+            });
+
+            modelBuilder.Entity<TblCountry>(entity =>
+            {
+                entity.HasData(
+                    new TblCountry { Id = 1, Name = "Nigeria", Code = "NG" },
+                    new TblCountry { Id = 2, Name = "United States", Code = "US" }
+                );
+            });
+
+            modelBuilder.Entity<TblState>(entity =>
+            {
+                entity.HasData(
+                    new TblState { Id = 1, CountryId = 1, Name = "Lagos" },
+                    new TblState { Id = 2, CountryId = 1, Name = "Abuja" },
+                    new TblState { Id = 3, CountryId = 1, Name = "Rivers" },
+                    new TblState { Id = 4, CountryId = 2, Name = "New York" },
+                    new TblState { Id = 5, CountryId = 2, Name = "California" }
+                );
+            });
+
+            modelBuilder.Entity<TblNatureOfBusiness>(entity =>
+            {
+                entity.HasData(
+                    new TblNatureOfBusiness { Id = 1, Name = "Real Estate", IsActive = true },
+                    new TblNatureOfBusiness { Id = 2, Name = "Agriculture", IsActive = true },
+                    new TblNatureOfBusiness { Id = 3, Name = "Technology", IsActive = true },
+                    new TblNatureOfBusiness { Id = 4, Name = "Finance", IsActive = true },
+                    new TblNatureOfBusiness { Id = 5, Name = "Manufacturing", IsActive = true }
+                );
+            });
+
+            modelBuilder.Entity<TblSourceOfFund>(entity =>
+            {
+                entity.HasData(
+                    new TblSourceOfFund { Id = 1, Name = "Investment", IsActive = true },
+                    new TblSourceOfFund { Id = 2, Name = "Business Revenue", IsActive = true },
+                    new TblSourceOfFund { Id = 3, Name = "Personal Savings", IsActive = true },
+                    new TblSourceOfFund { Id = 4, Name = "Loan", IsActive = true },
+                    new TblSourceOfFund { Id = 5, Name = "Gift/Inheritance", IsActive = true },
+                    new TblSourceOfFund { Id = 6, Name = "Others", IsActive = true }
                 );
             });
 

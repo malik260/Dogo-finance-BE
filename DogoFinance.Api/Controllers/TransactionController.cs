@@ -260,11 +260,38 @@ namespace DogoFinance.Api.Controllers
             if (response.Boolean) return Ok(response);
             return StatusCode(response.Status, response);
         }
+
+        [HttpGet("pending-approvals")]
+        public async Task<ActionResult<ApiResponse>> GetPendingApprovals()
+        {
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
+
+            var response = await _transactionService.GetPendingApprovals(long.Parse(userIdStr));
+            return Ok(response);
+        }
+
+        [HttpPost("process-approval")]
+        public async Task<ActionResult<ApiResponse>> ProcessApproval([FromBody] ProcessApprovalRequest request)
+        {
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
+
+            var response = await _transactionService.ProcessTransactionApproval(long.Parse(userIdStr), request.TransactionId, request.IsApproved, request.Pin);
+            return StatusCode(response.Status, response);
+        }
     }
 
     public class InitiateDepositRequest
     {
         public long CustomerId { get; set; }
         public decimal Amount { get; set; }
+    }
+
+    public class ProcessApprovalRequest
+    {
+        public long TransactionId { get; set; }
+        public bool IsApproved { get; set; }
+        public string Pin { get; set; } = null!;
     }
 }

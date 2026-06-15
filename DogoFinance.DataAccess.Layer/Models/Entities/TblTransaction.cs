@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -12,6 +12,7 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public TblTransaction()
         {
             InverseReversedTransaction = new HashSet<TblTransaction>();
+            TblTransactionApprovals = new HashSet<TblTransactionApproval>();
         }
 
         [Key]
@@ -47,5 +48,8 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public virtual TblTransaction? ReversedTransaction { get; set; }
         [InverseProperty(nameof(TblTransaction.ReversedTransaction))]
         public virtual ICollection<TblTransaction> InverseReversedTransaction { get; set; }
+
+        [InverseProperty(nameof(TblTransactionApproval.Transaction))]
+        public virtual ICollection<TblTransactionApproval> TblTransactionApprovals { get; set; }
     }
 }

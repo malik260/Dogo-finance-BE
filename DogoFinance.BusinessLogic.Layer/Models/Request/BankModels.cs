@@ -4,7 +4,9 @@ namespace DogoFinance.BusinessLogic.Layer.Models.Request
 {
     public class AddCustomerBankRequest
     {
-        public int BankId { get; set; }
+        public int? BankId { get; set; }
+        public string? BankName { get; set; }
+        public int? BankCountryId { get; set; }
         public string AccountNumber { get; set; } = null!;
         public string AccountName { get; set; } = null!;
         public bool IsDefault { get; set; }

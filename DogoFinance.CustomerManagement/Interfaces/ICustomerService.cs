@@ -16,6 +16,10 @@ namespace DogoFinance.CustomerManagement.Interfaces
         Task<ApiResponse> GetGenders();
         Task<ApiResponse> GetCustomerTypes();
         Task<ApiResponse> GetAddressDocTypes();
+        Task<ApiResponse> GetCountries();
+        Task<ApiResponse> GetStates(int countryId);
+        Task<ApiResponse> GetNatureOfBusinesses();
+        Task<ApiResponse> GetSourceOfFunds();
         Task<ApiResponse> InitiateAddressVerification(long customerId, AddressVerificationRequest request);
         Task<ApiResponse> GetVerificationStatuses(long customerId);
         Task<ApiResponse> GetCompanyBankDetails();

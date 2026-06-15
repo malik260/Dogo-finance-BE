@@ -11,7 +11,9 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         [Key]
         public long CustomerBankId { get; set; }
         public long CustomerId { get; set; }
-        public int BankId { get; set; }
+        public int? BankId { get; set; }
+        [StringLength(100)]
+        public string? BankName { get; set; }
         [StringLength(20)]
         public string AccountNumber { get; set; } = null!;
         [StringLength(100)]
@@ -19,6 +21,8 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public bool IsDefault { get; set; }
         public DateTime CreatedAt { get; set; }
         public bool IsDeleted { get; set; }
+
+        public int? BankCountryId { get; set; }
 
         // Domiciliary / International Routing Fields
         [StringLength(3)]
@@ -50,7 +54,10 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
 
         [ForeignKey(nameof(BankId))]
         [InverseProperty(nameof(TblBank.TblCustomerBanks))]
-        public virtual TblBank Bank { get; set; } = null!;
+        public virtual TblBank? Bank { get; set; }
+        [ForeignKey(nameof(BankCountryId))]
+        public virtual TblCountry? BankCountry { get; set; }
+
         [ForeignKey(nameof(CustomerId))]
         [InverseProperty(nameof(TblCustomer.TblCustomerBanks))]
         public virtual TblCustomer Customer { get; set; } = null!;

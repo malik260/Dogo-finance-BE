@@ -95,6 +95,18 @@ namespace DogoFinance.Authentication.Services
                 }
 
                 var customer = await _uow.Customers.GetByUserId(user.UserId);
+                long customerId = customer?.CustomerId ?? 0;
+                int customerTypeId = customer?.CustomerTypeId ?? 1;
+
+                if (roleName == "CorporateSignatory" && customer == null)
+                {
+                    var signatory = await BaseRepository().FindEntity<TblCorporateSignatory>(s => s.UserId == user.UserId);
+                    if (signatory != null)
+                    {
+                        customerId = signatory.CustomerId;
+                        customerTypeId = 2; // Corporate
+                    }
+                }
 
                 var tokenResponse = _jwtHelper.GenerateTokenResponse(user.UserId, user.Email, roleName);
 
@@ -127,8 +139,8 @@ namespace DogoFinance.Authentication.Services
                     LastName = customer?.LastName ?? user.LastName ?? "User",
                     user.PhoneNumber,
                     UserId = user.UserId,
-                    CustomerId = customer?.CustomerId ?? 0,
-                    CustomerTypeId = customer?.CustomerTypeId ?? 1,
+                    CustomerId = customerId,
+                    CustomerTypeId = customerTypeId,
                     SessionId = session.SessionId,
                     user.IsPinSet,
                     Is2faEnabled = user.Is2faEnabled ?? false

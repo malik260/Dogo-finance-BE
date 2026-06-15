@@ -11,6 +11,7 @@ using DogoFinance.Integration.Interfaces;
 using DogoFinance.Integration.Models.Monnify;
 using DogoFinance.DataAccess.Layer.Models.Constants;
 using Microsoft.Extensions.Configuration;
+using DogoFinance.BusinessLogic.Layer.Helpers;
 
 namespace DogoFinance.AdminManagement.Services
 {
@@ -881,22 +882,54 @@ namespace DogoFinance.AdminManagement.Services
                     {
                         DirectorId = d.DirectorId,
                         Name = $"{d.FirstName} {d.Surname}",
+                        Title = d.Title,
+                        Surname = d.Surname,
+                        FirstName = d.FirstName,
+                        OtherNames = d.OtherNames,
+                        Dob = d.DateOfBirth.ToString("yyyy-MM-dd"),
+                        Email = d.BusinessEmail,
+                        Phone = d.PhoneNumber,
+                        Bvn = d.Bvn,
+                        ResidentialAddress = d.ResidentialAddress,
+                        Nationality = d.Nationality,
+                        Gender = d.Gender,
+                        IsPep = d.IsPep ? "Yes" : "No",
+                        SigningClass = d.SigningClass,
                         Role = d.Designation,
                         Shareholding = "N/A",
                         IdType = d.IdentityType,
                         IdNumber = d.IdNumber,
-                        Status = d.IsActive ? "Verified" : "Pending"
+                        Status = d.Status,
+                        PassportPhoto = d.PassportPhotoUrl,
+                        SignatureImage = d.SignatureCardUrl,
+                        IdDocument = d.IdentityDocumentUrl
                     }).ToList(),
 
                     Signatories = c.TblCorporateSignatories?.Select(s => new
                     {
                         SignatoryId = s.SignatoryId,
                         Name = $"{s.FirstName} {s.Surname}",
+                        Title = s.Title,
+                        Surname = s.Surname,
+                        FirstName = s.FirstName,
+                        OtherNames = s.OtherNames,
+                        Dob = s.DateOfBirth.ToString("yyyy-MM-dd"),
+                        Email = s.BusinessEmail,
+                        Phone = s.PhoneNumber,
+                        Bvn = s.Bvn,
+                        ResidentialAddress = s.ResidentialAddress,
+                        Nationality = s.Nationality,
+                        Gender = s.Gender,
+                        IsPep = s.IsPep ? "Yes" : "No",
+                        SigningClass = s.SigningClass,
                         Role = s.Designation,
                         Shareholding = "N/A",
                         IdType = s.IdentityType,
                         IdNumber = s.IdNumber,
-                        Status = s.IsActive ? "Verified" : "Pending"
+                        Status = s.Status,
+                        PassportPhoto = s.PassportPhotoUrl,
+                        SignatureImage = s.SignatureCardUrl,
+                        IdDocument = s.IdentityDocumentUrl
                     }).ToList(),
 
                     ContactPerson = c.TblCorporateContacts?.Where(cc => cc.IsPrimary).Select(cc => new
@@ -1012,6 +1045,140 @@ namespace DogoFinance.AdminManagement.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to review corporate registration");
+                return new ApiResponse { Message = ex.Message, Status = 500 };
+            }
+        }
+        public async Task<ApiResponse> ReviewCorporateDirector(long directorId, AdminCorporateMemberReviewRequest request, long adminUserId)
+        {
+            try
+            {
+                var director = await BaseRepository().FindEntity<TblCorporateDirector>((int)directorId);
+                if (director == null)
+                    return new ApiResponse { Message = "Director not found." };
+
+                director.Status = request.Approved ? "Verified" : "Rejected";
+                director.IsActive = request.Approved;
+                director.AdminNotes = request.AdminNotes;
+                director.UpdatedAt = DateTime.UtcNow;
+
+                await BaseRepository().Update(director);
+
+                if (!request.Approved)
+                {
+                    var notif = new TblNotification
+                    {
+                        CustomerId = director.CustomerId,
+                        Title = "Director Review Rejected",
+                        Message = $"The review for director '{director.FirstName} {director.Surname}' was rejected. Reason: {request.AdminNotes}",
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await BaseRepository().Insert(notif);
+                }
+
+                await BaseRepository().SaveChanges();
+
+                return new ApiResponse { Success = true, Message = "Director reviewed successfully." };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to review corporate director");
+                return new ApiResponse { Message = ex.Message, Status = 500 };
+            }
+        }
+
+        public async Task<ApiResponse> ReviewCorporateSignatory(long signatoryId, AdminCorporateMemberReviewRequest request, long adminUserId)
+        {
+            try
+            {
+                var signatory = await BaseRepository().FindEntity<TblCorporateSignatory>((int)signatoryId);
+                if (signatory == null)
+                    return new ApiResponse { Message = "Signatory not found." };
+
+                signatory.Status = request.Approved ? "Verified" : "Rejected";
+                signatory.IsActive = request.Approved;
+                signatory.AdminNotes = request.AdminNotes;
+                signatory.UpdatedAt = DateTime.UtcNow;
+
+                if (request.Approved)
+                {
+                    // Create portal user account for the signatory on approval
+                    var (hash, salt) = HashHelper.CreateHash("TempPass123!");
+                    var newUser = new TblUser
+                    {
+                        UserName = signatory.BusinessEmail,
+                        Email = signatory.BusinessEmail,
+                        PhoneNumber = signatory.PhoneNumber,
+                        FirstName = signatory.FirstName,
+                        LastName = signatory.Surname,
+                        PasswordHash = hash,
+                        Salt = salt,
+                        IsActive = true,
+                        IsLocked = false,
+                        FailedLoginAttempts = 0,
+                        CreatedAt = DateTime.UtcNow,
+                        IsDeleted = false
+                    };
+
+                    await BaseRepository().Insert(newUser);
+                    await BaseRepository().SaveChanges();
+
+                    // Assign role
+                    var role = await BaseRepository().FindEntity<TblRole>(r => r.Name == "CorporateSignatory");
+                    if (role == null)
+                    {
+                        role = await BaseRepository().FindEntity<TblRole>(r => r.Name == "Customer");
+                    }
+                    
+                    if (role != null)
+                    {
+                        await BaseRepository().Insert(new TblUserRole
+                        {
+                            UserId = newUser.UserId,
+                            RoleId = role.Id
+                        });
+                    }
+
+                    signatory.UserId = newUser.UserId;
+
+                    // Send welcome email with credentials
+                    try
+                    {
+                        var baseUrl = (_configuration["SystemConfig:FrontendBaseUrl"] ?? "https://app.dogofinance.com").Trim().TrimEnd('/');
+                        var placeholders = new Dictionary<string, string>
+                        {
+                            { "FirstName", signatory.FirstName ?? "Signatory" },
+                            { "LastName", signatory.Surname ?? "Member" },
+                            { "Email", signatory.BusinessEmail },
+                            { "Password", "TempPass123!" },
+                            { "LoginLink", $"{baseUrl}/login" }
+                        };
+                        await _emailService.SendTemplateEmail(signatory.BusinessEmail, "Welcome to the DogoFinance Corporate Team", "SignatoryCreated", placeholders);
+                    }
+                    catch (Exception mailEx)
+                    {
+                        _logger.LogError(mailEx, "Failed to send welcome email to approved corporate signatory: {Email}", signatory.BusinessEmail);
+                    }
+                }
+                else
+                {
+                    var notif = new TblNotification
+                    {
+                        CustomerId = signatory.CustomerId,
+                        Title = "Signatory Review Rejected",
+                        Message = $"The review for signatory '{signatory.FirstName} {signatory.Surname}' was rejected. Reason: {request.AdminNotes}",
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await BaseRepository().Insert(notif);
+                }
+
+                await BaseRepository().Update(signatory);
+                await BaseRepository().SaveChanges();
+
+                return new ApiResponse { Success = true, Message = "Signatory reviewed successfully." };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to review corporate signatory");
                 return new ApiResponse { Message = ex.Message, Status = 500 };
             }
         }

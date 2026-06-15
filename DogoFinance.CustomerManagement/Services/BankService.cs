@@ -56,12 +56,13 @@ namespace DogoFinance.CustomerManagement.Services
 
                 var result = customerBanks.Select(cb =>
                 {
-                    var bank = banks.FirstOrDefault(b => b.BankId == cb.BankId);
+                    var bank = cb.BankId.HasValue ? banks.FirstOrDefault(b => b.BankId == cb.BankId) : null;
                     return new
                     {
                         cb.CustomerBankId,
                         cb.BankId,
-                        BankName = bank?.BankName ?? "Unknown Bank",
+                        cb.BankCountryId,
+                        BankName = bank?.BankName ?? cb.BankName ?? "Unknown Bank",
                         BankLogo = bank?.LogoUrl,
                         cb.AccountNumber,
                         cb.AccountName,
@@ -106,7 +107,6 @@ namespace DogoFinance.CustomerManagement.Services
                 // Check for duplicate account number/bank combo
                 var existing = await BaseRepository().FindEntity<TblCustomerBank>(cb => 
                     cb.CustomerId == customer.CustomerId && 
-                    cb.BankId == request.BankId && 
                     cb.AccountNumber == request.AccountNumber &&
                     !cb.IsDeleted);
 
@@ -134,6 +134,8 @@ namespace DogoFinance.CustomerManagement.Services
                 {
                     CustomerId = customer.CustomerId,
                     BankId = request.BankId,
+                    BankCountryId = request.BankCountryId,
+                    BankName = request.BankName,
                     AccountNumber = request.AccountNumber,
                     AccountName = request.AccountName,
                     IsDefault = isDefault,

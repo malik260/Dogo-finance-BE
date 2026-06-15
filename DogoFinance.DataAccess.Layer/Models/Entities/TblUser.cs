@@ -18,6 +18,8 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
             TblPayments = new HashSet<TblPayment>();
             TblTransactionApprovedByUsers = new HashSet<TblTransaction>();
             TblTransactionInitiatedByUsers = new HashSet<TblTransaction>();
+            TblCorporateSignatories = new HashSet<TblCorporateSignatory>();
+            TblTransactionApprovals = new HashSet<TblTransactionApproval>();
             TblUserRoles = new HashSet<TblUserRole>();
         }
 
@@ -79,6 +81,12 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public virtual ICollection<TblTransaction> TblTransactionApprovedByUsers { get; set; }
         [InverseProperty(nameof(TblTransaction.InitiatedByUser))]
         public virtual ICollection<TblTransaction> TblTransactionInitiatedByUsers { get; set; }
+
+        [InverseProperty(nameof(TblCorporateSignatory.User))]
+        public virtual ICollection<TblCorporateSignatory> TblCorporateSignatories { get; set; }
+
+        [InverseProperty(nameof(TblTransactionApproval.ApproverUser))]
+        public virtual ICollection<TblTransactionApproval> TblTransactionApprovals { get; set; }
         [InverseProperty(nameof(TblUserRole.User))]
         public virtual ICollection<TblUserRole> TblUserRoles { get; set; }
     }
