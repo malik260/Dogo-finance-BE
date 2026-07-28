@@ -20,6 +20,10 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         
         [Column(TypeName = "decimal(18, 2)")]
         public decimal ExitFeeApplied { get; set; }
+
+        /// <summary>Total pro-rated platform fees (management, custody, SEC) deducted at the point of liquidation.</summary>
+        [Column(TypeName = "decimal(18, 2)")]
+        public decimal AccruedFeesApplied { get; set; } = 0;
         
         [Column(TypeName = "decimal(18, 2)")]
         public decimal NetPayableAmount { get; set; }

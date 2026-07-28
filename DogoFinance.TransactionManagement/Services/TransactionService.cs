@@ -7,6 +7,7 @@ using DogoFinance.DataAccess.Layer.Models.Entities;
 using DogoFinance.DataAccess.Layer.Repositories.Base;
 using DogoFinance.Integration.Interfaces;
 using DogoFinance.Integration.Models.Monnify;
+using DogoFinance.TransactionManagement.DTOs;
 using DogoFinance.TransactionManagement.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
@@ -25,8 +26,9 @@ namespace DogoFinance.TransactionManagement.Services
         private readonly ILogger<TransactionService> _logger;
         private readonly IConfiguration _configuration;
         private readonly IAccountingService _accountingService;
+        private readonly IFxRateService _fxRateService;
 
-        public TransactionService(IUnitOfWork uow, IMonnifyService monnifyService, IEmailService emailService, ILogger<TransactionService> logger, IConfiguration configuration, IAccountingService accountingService)
+        public TransactionService(IUnitOfWork uow, IMonnifyService monnifyService, IEmailService emailService, ILogger<TransactionService> logger, IConfiguration configuration, IAccountingService accountingService, IFxRateService fxRateService)
         {
             _uow = uow;
             _monnifyService = monnifyService;
@@ -34,6 +36,7 @@ namespace DogoFinance.TransactionManagement.Services
             _logger = logger;
             _configuration = configuration;
             _accountingService = accountingService;
+            _fxRateService = fxRateService;
             
             // Link the base repository to the Unit of Work's shared context to avoid deadlocks
             SetSharedRepository(_uow.GenericRepository);
@@ -1092,12 +1095,23 @@ namespace DogoFinance.TransactionManagement.Services
         public async Task<ApiResponse> GetWallet(long customerId)
         {
             var response = new ApiResponse();
-            var wallet = await _uow.Wallets.GetByCustomerId(customerId);
-            if (wallet == null) {
-                response.SetError("Wallet not found", 404);
-                return response;
-            }
-            response.SetMessage("Wallet fetched", true, wallet);
+            var wallets = await _uow.GenericRepository.AsQueryable<TblWallet>(w => w.CustomerId == customerId).ToListAsync();
+            
+            var ngnWallet = wallets.FirstOrDefault(w => w.Currency == 1);
+            var usdWallet = wallets.FirstOrDefault(w => w.Currency == 2);
+
+            var walletData = new
+            {
+                Balance = ngnWallet?.Balance ?? 0, // NGN balance
+                NgnBalance = ngnWallet?.Balance ?? 0,
+                UsdBalance = usdWallet?.Balance ?? 0, // USD balance
+                DollarBalance = usdWallet?.Balance ?? 0,
+                NgnWalletNumber = ngnWallet?.WalletNumber,
+                UsdWalletNumber = usdWallet?.WalletNumber,
+                Wallets = wallets
+            };
+
+            response.SetMessage("Wallet fetched", true, walletData);
             return response;
         }
 
@@ -1142,6 +1156,226 @@ namespace DogoFinance.TransactionManagement.Services
             {
                 _logger.LogError(ex, "Error submitting manual funding request");
                 return new ApiResponse { Message = "An error occurred while submitting your request", Status = 500 };
+            }
+        }
+
+        // ─── DOLLAR WALLET ────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Returns a live FX rate quote for converting a given NGN amount to USD.
+        /// </summary>
+        public async Task<ApiResponse> GetFxRateQuoteAsync(decimal ngnAmount)
+        {
+            try
+            {
+                var rateResult = await _fxRateService.GetNgnToUsdRateAsync();
+                var usdAmount = Math.Round(ngnAmount / rateResult.EffectiveRateWithMargin, 2);
+
+                var quote = new FxRateQuoteResponse
+                {
+                    NgnAmount = ngnAmount,
+                    BaseNgnPerUsdRate = rateResult.NgnPerUsdRate,
+                    EffectiveRateWithMargin = rateResult.EffectiveRateWithMargin,
+                    EstimatedUsdAmount = usdAmount,
+                    Provider = rateResult.Provider,
+                    IsFallbackRate = rateResult.IsFallback,
+                    Timestamp = rateResult.FetchedAt
+                };
+
+                return new ApiResponse { Success = true, Message = "FX rate quote retrieved", Data = quote, Status = 200 };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching FX rate quote");
+                return new ApiResponse { Message = "Unable to retrieve exchange rate at this time.", Status = 503 };
+            }
+        }
+
+        /// <summary>
+        /// Converts NGN from the customer's NGN wallet into their USD wallet at the live FX rate.
+        /// Double-entry: Dr NGN Wallet Liability + Dr USD Dom. Bank | Cr NGN Dom. Bank + Cr USD Wallet Liability.
+        /// </summary>
+        public async Task<ApiResponse> FundDollarWalletFromNairaAsync(long userID, FundDollarWalletFromNairaRequest request)
+        {
+            await _uow.BeginTransactionAsync();
+            try
+            {
+
+                var user = await _uow.GenericRepository.FindEntity<TblUser>(userID);
+                if (user == null) { await _uow.RollbackAsync(); return new ApiResponse { Message = "User not found", Status = 404 }; }
+
+
+                // 1. Load customer & user
+                var customer = await _uow.Customers.GetByUserId(user.UserId);
+                if (customer == null) { await _uow.RollbackAsync(); return new ApiResponse { Message = "Customer not found", Status = 404 }; }
+
+                
+                // 3. Load NGN wallet & check balance
+                var ngnWallet = await _uow.Wallets.GetByCustomerId(customer.CustomerId); // Currency = 1 (NGN)
+                if (ngnWallet == null || ngnWallet.Currency != 1)
+                {
+                    await _uow.RollbackAsync();
+                    return new ApiResponse { Message = "NGN wallet not found.", Status = 404 };
+                }
+
+                if (ngnWallet.Balance < request.NairaAmount)
+                {
+                    await _uow.RollbackAsync();
+                    return new ApiResponse { Message = "Insufficient NGN balance.", Status = 400 };
+                }
+
+                // 4. Load USD wallet (auto-create if missing for existing customers)
+                var usdWallet = await _uow.GenericRepository.FindEntity<TblWallet>(w => w.CustomerId == customer.CustomerId && w.Currency == 2);
+                if (usdWallet == null)
+                {
+                    usdWallet = new TblWallet
+                    {
+                        CustomerId = customer.CustomerId,
+                        WalletNumber = new Random().NextInt64(1000000000, 9999999999).ToString(),
+                        Currency = 2, // USD
+                        Balance = 0,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _uow.Wallets.CreateWallet(usdWallet);
+                }
+
+                // 5. Get live FX rate
+                var rateResult = await _fxRateService.GetNgnToUsdRateAsync();
+                var usdCredited = Math.Round(request.NairaAmount / rateResult.EffectiveRateWithMargin, 2);
+
+                var reference = $"FXCONV_{DateTime.UtcNow.Ticks}";
+
+                // 6. Debit NGN wallet
+                ngnWallet.Balance -= request.NairaAmount;
+                await _uow.Wallets.UpdateWallet(ngnWallet);
+
+                // 7. Credit USD wallet
+                usdWallet.Balance += usdCredited;
+                await _uow.GenericRepository.Update(usdWallet);
+
+                // 8. Create transaction log
+                var transaction = new TblTransaction
+                {
+                    Reference = reference,
+                    TransactionType = TransactionType.DEPOSIT, // FX conversion
+                    Amount = request.NairaAmount,
+                    Status = 1,
+                    Narration = $"FX Conversion: NGN {request.NairaAmount:N2} → USD {usdCredited:N2} @ {rateResult.EffectiveRateWithMargin:N4}",
+                    InitiatedByUserId = customer.UserId,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _uow.Transactions.CreateTransaction(transaction);
+
+                // 9. Sub-ledger entries
+                await LogLedger(transaction.TransactionId, ngnWallet.WalletId, EntryType.DEBIT, request.NairaAmount, ngnWallet.Balance,
+                    $"FX Conversion Debit (NGN)");
+                await LogLedger(transaction.TransactionId, usdWallet.WalletId, EntryType.CREDIT, usdCredited, usdWallet.Balance,
+                    $"FX Conversion Credit (USD)");
+
+                // 10. Double-entry GL postings
+                //  Dr 2110 (Customer NGN Wallet Liability reduces) — reduce our liability in NGN
+                //  Cr 1110 (NGN Dom. Bank reduces)                  — NGN leaves our NGN bank
+                //  Dr 1120 (USD Dom. Bank increases)                — USD enters our USD bank
+                //  Cr 2120 (Customer USD Wallet Liability increases) — we owe customer in USD
+                await _accountingService.PostJournalAsync(new JournalEntryDto
+                {
+                    Reference = reference,
+                    Narration = $"FX Conversion NGN→USD - Customer {userID}",
+                    TransactionDate = DateTime.UtcNow,
+                    Lines = new List<JournalLineDto>
+                    {
+                        new JournalLineDto { AccountCode = "2110", Debit = request.NairaAmount, Credit = 0,             Narration = "NGN Wallet Liability Reduced" },
+                        new JournalLineDto { AccountCode = "1110", Debit = 0,                   Credit = request.NairaAmount, Narration = "NGN Bank Outflow" },
+                        new JournalLineDto { AccountCode = "1120", Debit = usdCredited,          Credit = 0,             Narration = "USD Dom. Bank Inflow" },
+                        new JournalLineDto { AccountCode = "2120", Debit = 0,                   Credit = usdCredited,   Narration = "USD Wallet Liability Created" }
+                    }
+                });
+
+                await _uow.CommitAsync();
+
+                return new ApiResponse
+                {
+                    Success = true,
+                    Message = $"USD wallet funded successfully. NGN {request.NairaAmount:N2} converted to USD {usdCredited:N2} at rate {rateResult.EffectiveRateWithMargin:N4}.",
+                    Data = new { UsdCredited = usdCredited, NgnDebited = request.NairaAmount, Rate = rateResult.EffectiveRateWithMargin, Reference = reference },
+                    Status = 200
+                };
+            }
+            catch (Exception ex)
+            {
+                await _uow.RollbackAsync();
+                _logger.LogError(ex, "FundDollarWalletFromNaira Error for Customer {CustomerId}", userID);
+                return new ApiResponse { Message = "An error occurred while processing the FX conversion.", Status = 500 };
+            }
+        }
+
+        /// <summary>
+        /// Records an admin-reviewed wire transfer funding request for a customer's USD wallet.
+        /// Admin will manually verify bank inflow and approve to credit the USD wallet.
+        /// </summary>
+        public async Task<ApiResponse> InitiateDollarWireFundingAsync(long customerId, FundDollarWalletViaWireRequest request)
+        {
+            try
+            {
+                var customer = await _uow.GenericRepository.FindEntity<TblCustomer>(customerId);
+                if (customer == null) return new ApiResponse { Message = "Customer not found", Status = 404 };
+
+                var usdWallet = await _uow.GenericRepository.FindEntity<TblWallet>(w => w.CustomerId == customerId && w.Currency == 2);
+                if (usdWallet == null)
+                {
+                    usdWallet = new TblWallet
+                    {
+                        CustomerId = customerId,
+                        WalletNumber = new Random().NextInt64(1000000000, 9999999999).ToString(),
+                        Currency = 2, // USD
+                        Balance = 0,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _uow.Wallets.CreateWallet(usdWallet);
+                }
+
+                var reference = $"WIRE_{DateTime.UtcNow.Ticks}";
+
+                // Log a pending manual funding record for admin review
+                var manualRequest = new TblManualFundingRequest
+                {
+                    CustomerId = customerId,
+                    Amount = request.UsdAmount,
+                    Reference = request.BankReference,
+                    ReceiptPath = request.ProofDocumentUrl,
+                    Status = "Pending",
+                    InitiatedAt = DateTime.UtcNow
+                };
+                await _uow.GenericRepository.Insert(manualRequest);
+
+                // Also log a pending transaction for customer visibility
+                var transaction = new TblTransaction
+                {
+                    Reference = reference,
+                    TransactionType = TransactionType.DEPOSIT,
+                    Amount = request.UsdAmount,
+                    Status = 0, // PENDING — admin approval required
+                    Narration = $"USD Wire Funding: {request.Remarks ?? "Wire Transfer"}. Bank Ref: {request.BankReference}",
+                    InitiatedByUserId = customer.UserId,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _uow.Transactions.CreateTransaction(transaction);
+                await _uow.SaveChangesAsync();
+
+                return new ApiResponse
+                {
+                    Success = true,
+                    Message = "Wire funding request submitted. Your USD wallet will be credited once the transfer is confirmed by our team (typically within 1 business day).",
+                    Data = new { Reference = reference, UsdAmount = request.UsdAmount },
+                    Status = 200
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "InitiateDollarWireFunding Error for Customer {CustomerId}", customerId);
+                return new ApiResponse { Message = "An error occurred while submitting the wire funding request.", Status = 500 };
             }
         }
     }

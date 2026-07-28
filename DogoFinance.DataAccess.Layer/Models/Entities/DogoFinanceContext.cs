@@ -78,6 +78,8 @@ namespace DogoFinance.DataAccess.Layer.Models.Entities
         public virtual DbSet<TblChartOfAccount> TblChartOfAccounts { get; set; } = null!;
         public virtual DbSet<TblJournalEntry> TblJournalEntries { get; set; } = null!;
         public virtual DbSet<TblJournalLine> TblJournalLines { get; set; } = null!;
+        public virtual DbSet<TblPortfolioFeeConfig> TblPortfolioFeeConfigs { get; set; } = null!;
+        public virtual DbSet<TblQuarterlyFeeLog> TblQuarterlyFeeLogs { get; set; } = null!;
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {

@@ -143,11 +143,14 @@ namespace DogoFinance.AccountingManagement.Services
                 // Assets (1000s)
                 new TblChartOfAccount { AccountCode = "1000", AccountName = "ASSETS", AccountType = "Asset", IsLeaf = false },
                 new TblChartOfAccount { AccountCode = "1110", AccountName = "Cash at Bank (Monnify)", AccountType = "Asset", IsLeaf = true },
+                new TblChartOfAccount { AccountCode = "1120", AccountName = "DogoFinance USD Domiciliary Bank Account", AccountType = "Asset", IsLeaf = true },
                 new TblChartOfAccount { AccountCode = "1210", AccountName = "Investment Portfolios", AccountType = "Asset", IsLeaf = true },
                 
                 // Liabilities (2000s)
                 new TblChartOfAccount { AccountCode = "2000", AccountName = "LIABILITIES", AccountType = "Liability", IsLeaf = false },
-                new TblChartOfAccount { AccountCode = "2110", AccountName = "Customer Wallets", AccountType = "Liability", IsLeaf = true },
+                new TblChartOfAccount { AccountCode = "2110", AccountName = "Customer NGN Wallets", AccountType = "Liability", IsLeaf = true },
+                new TblChartOfAccount { AccountCode = "2120", AccountName = "Customer USD Wallet Liability", AccountType = "Liability", IsLeaf = true },
+                new TblChartOfAccount { AccountCode = "2210", AccountName = "SEC Regulatory Fees Payable", AccountType = "Liability", IsLeaf = true },
                 new TblChartOfAccount { AccountCode = "2310", AccountName = "Tax Payable", AccountType = "Liability", IsLeaf = true },
 
                 // Equity (3000s)
@@ -157,8 +160,11 @@ namespace DogoFinance.AccountingManagement.Services
 
                 // Revenue (4000s)
                 new TblChartOfAccount { AccountCode = "4000", AccountName = "REVENUE", AccountType = "Revenue", IsLeaf = false },
-                new TblChartOfAccount { AccountCode = "4210", AccountName = "Fee Income", AccountType = "Revenue", IsLeaf = true },
                 new TblChartOfAccount { AccountCode = "4110", AccountName = "Investment Interest", AccountType = "Revenue", IsLeaf = true },
+                new TblChartOfAccount { AccountCode = "4210", AccountName = "Fee Income", AccountType = "Revenue", IsLeaf = true },
+                new TblChartOfAccount { AccountCode = "4220", AccountName = "Management Fee Revenue", AccountType = "Revenue", IsLeaf = true },
+                new TblChartOfAccount { AccountCode = "4230", AccountName = "Custody Fee Revenue", AccountType = "Revenue", IsLeaf = true },
+                new TblChartOfAccount { AccountCode = "4240", AccountName = "Early Exit Fee Revenue", AccountType = "Revenue", IsLeaf = true },
 
                 // Expenses (5000s)
                 new TblChartOfAccount { AccountCode = "5000", AccountName = "EXPENSES", AccountType = "Expense", IsLeaf = false },

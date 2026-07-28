@@ -25,9 +25,9 @@ namespace DogoFinance.CustomerManagement.Services
         private readonly IMonnifyService _monnifyService;
         private readonly ICloudinaryService _cloudinaryService;
         private readonly IDocumentProcessingService _docProcessor;
-        private readonly IYouVerifyService _youVerifyService;
+        private readonly IDojahService _dojahService;
 
-        public CustomerService(IUnitOfWork uow, IEmailService emailService, ILogger<CustomerService> logger, IConfiguration configuration, ITransactionService transactionService, IMonnifyService monnifyService, ICloudinaryService cloudinaryService, IDocumentProcessingService docProcessor, IYouVerifyService youVerifyService)
+        public CustomerService(IUnitOfWork uow, IEmailService emailService, ILogger<CustomerService> logger, IConfiguration configuration, ITransactionService transactionService, IMonnifyService monnifyService, ICloudinaryService cloudinaryService, IDocumentProcessingService docProcessor, IDojahService dojahService)
         {
             _uow = uow;
             _emailService = emailService;
@@ -37,7 +37,7 @@ namespace DogoFinance.CustomerManagement.Services
             _monnifyService = monnifyService;
             _cloudinaryService = cloudinaryService;
             _docProcessor = docProcessor;
-            _youVerifyService = youVerifyService;
+            _dojahService = dojahService;
         }
 
         public async Task<ApiResponse> SignUp(SignUpRequest request)
@@ -107,17 +107,28 @@ namespace DogoFinance.CustomerManagement.Services
 
                 await _uow.Customers.SaveCustomer(customer);
                 
-                // Create Wallet for Customer
-                var wallet = new TblWallet
+                // Create Wallets for Customer (NGN & USD)
+                var ngnWallet = new TblWallet
                 {
                     CustomerId = customer.CustomerId,
                     WalletNumber = new Random().NextInt64(1000000000, 9999999999).ToString(),
-                    Currency = 1, // Assume 1 for NGN
+                    Currency = 1, // NGN
                     Balance = 0,
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow
                 };
-                await _uow.Wallets.CreateWallet(wallet);
+                await _uow.Wallets.CreateWallet(ngnWallet);
+
+                var usdWallet = new TblWallet
+                {
+                    CustomerId = customer.CustomerId,
+                    WalletNumber = new Random().NextInt64(1000000000, 9999999999).ToString(),
+                    Currency = 2, // USD
+                    Balance = 0,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _uow.Wallets.CreateWallet(usdWallet);
 
                 // Assign Role (3 = Customer)
                 var userRole = new TblUserRole
@@ -334,50 +345,45 @@ namespace DogoFinance.CustomerManagement.Services
 
             if (customer.Bvnverified) return new ApiResponse { Success = true, Message = "BVN already verified", Boolean = true };
 
-            var youVerifyRequest = new Integration.Models.YouVerify.BvnVerificationRequest
+            var dojahResponse = await _dojahService.ValidateBvnAsync(
+                request.Bvn,
+                customer.FirstName,
+                customer.LastName,
+                customer.DateOfBirth?.ToString("yyyy-MM-dd")
+            );
+
+            if (dojahResponse != null && dojahResponse.Entity != null && string.IsNullOrEmpty(dojahResponse.Error))
             {
-                Id = request.Bvn,
-                IsSubjectConsent = true,
-                Validations = new Integration.Models.YouVerify.IdentityValidations
+                var bvnData = dojahResponse.Entity;
+
+                // Validate BVN status and Name match statuses from Dojah
+                bool bvnValid = bvnData.Bvn == null || bvnData.Bvn.Status;
+                bool firstNameMatch = bvnData.FirstName == null || bvnData.FirstName.Status || bvnData.FirstName.ConfidenceValue > 0;
+                bool lastNameMatch = bvnData.LastName == null || bvnData.LastName.Status || bvnData.LastName.ConfidenceValue > 0;
+
+                if (!bvnValid || !firstNameMatch || !lastNameMatch)
                 {
-                    Data = new Integration.Models.YouVerify.IdentityDataValidation
+                    _logger.LogWarning("BVN verification details mismatch for customer {CustomerId}. Dojah status: BVN={BvnValid}, First={FirstMatch}, Last={LastMatch}",
+                        customerId, bvnValid, firstNameMatch, lastNameMatch);
+
+                    return new ApiResponse
                     {
-                        FirstName = customer.FirstName,
-                        LastName = customer.LastName,
-                        DateOfBirth = customer.DateOfBirth?.ToString("yyyy-MM-dd")
-                    }
-                },
-                Metadata = new Dictionary<string, string> { { "customerId", customerId.ToString() } }
-            };
-
-            var youVerifyResponse = await _youVerifyService.VerifyBvn(youVerifyRequest);
-
-            if (youVerifyResponse != null && youVerifyResponse.Success)
-            {
-                // Successful match logic
-                if (youVerifyResponse.Data?.Status == "found")
-                {
-                    // Ensure the data validation also passed
-                    if (!youVerifyResponse.Data.AllValidationPassed)
-                    {
-                        var messages = youVerifyResponse.Data.Validations?.ValidationMessages ?? "Data validation failed.";
-                        return new ApiResponse { Message = $"BVN details found but validation failed: {messages}", Status = 400 };
-                    }
-
-                    customer.Bvn = request.Bvn;
-                    customer.Bvnverified = true;
-                    customer.BvnverifiedAt = DateTime.UtcNow;
-                    customer.ModifiedAt = DateTime.UtcNow;
-
-                    await _uow.Customers.SaveCustomer(customer);
-
-                    return new ApiResponse { Success = true, Message = "BVN verified successfully", Boolean = true, Data = youVerifyResponse.Data };
+                        Message = $"BVN verification failed: Provided identity details do not match registered profile name ({customer.FirstName} {customer.LastName}).",
+                        Status = 400
+                    };
                 }
-                
-                return new ApiResponse { Message = "BVN not found or invalid.", Status = 400 };
+
+                customer.Bvn = request.Bvn;
+                customer.Bvnverified = true;
+                customer.BvnverifiedAt = DateTime.UtcNow;
+                customer.ModifiedAt = DateTime.UtcNow;
+
+                await _uow.Customers.SaveCustomer(customer);
+
+                return new ApiResponse { Success = true, Message = "BVN verified successfully", Boolean = true, Data = bvnData };
             }
 
-            return new ApiResponse { Message = youVerifyResponse?.Message ?? "BVN verification failed", Status = 400 };
+            return new ApiResponse { Message = dojahResponse?.Error ?? "BVN validation failed", Status = 400 };
         }
 
         public async Task<ApiResponse> VerifyNin(long customerId, NinVerificationRequest request)
@@ -387,49 +393,47 @@ namespace DogoFinance.CustomerManagement.Services
 
             if (customer.Ninverified) return new ApiResponse { Success = true, Message = "NIN already verified", Boolean = true };
 
-            var youVerifyRequest = new Integration.Models.YouVerify.NinVerificationRequest
+            var dojahResponse = await _dojahService.LookupNinAsync(
+                request.Nin,
+                customer.FirstName,
+                customer.LastName,
+                customer.DateOfBirth?.ToString("yyyy-MM-dd")
+            );
+
+            if (dojahResponse != null && dojahResponse.Entity != null && string.IsNullOrEmpty(dojahResponse.Error))
             {
-                Id = request.Nin,
-                IsSubjectConsent = true,
-                Validations = new Integration.Models.YouVerify.IdentityValidations
+                var ninData = dojahResponse.Entity;
+
+                // Validate NIN status and Name match statuses from Dojah
+                bool ninValid = ninData.Nin == null || ninData.Nin.Status;
+                bool firstNameMatch = ninData.FirstName?.Status == true || ninData.FirstName?.ConfidenceValue > 0 ||
+                    string.Equals(ninData.RawFirstName?.StringValue?.Trim(), customer.FirstName?.Trim(), StringComparison.OrdinalIgnoreCase);
+                bool lastNameMatch = ninData.LastName?.Status == true || ninData.LastName?.ConfidenceValue > 0 ||
+                    string.Equals(ninData.RawLastName?.StringValue?.Trim(), customer.LastName?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+                if (!ninValid || !firstNameMatch || !lastNameMatch)
                 {
-                    Data = new Integration.Models.YouVerify.IdentityDataValidation
+                    _logger.LogWarning("NIN verification details mismatch for customer {CustomerId}. Dojah status: NIN={NinValid}, First={FirstMatch}, Last={LastMatch}",
+                        customerId, ninValid, firstNameMatch, lastNameMatch);
+
+                    return new ApiResponse
                     {
-                        FirstName = customer.FirstName,
-                        LastName = customer.LastName,
-                        DateOfBirth = customer.DateOfBirth?.ToString("yyyy-MM-dd")
-                    }
-                },
-                Metadata = new Dictionary<string, string> { { "customerId", customerId.ToString() } }
-            };
-
-            var youVerifyResponse = await _youVerifyService.VerifyNin(youVerifyRequest);
-
-            if (youVerifyResponse != null && youVerifyResponse.Success)
-            {
-                if (youVerifyResponse.Data?.Status == "found")
-                {
-                    // Ensure the data validation also passed
-                    if (!youVerifyResponse.Data.AllValidationPassed)
-                    {
-                        var messages = youVerifyResponse.Data.Validations?.ValidationMessages ?? "Data validation failed.";
-                        return new ApiResponse { Message = $"NIN details found but validation failed: {messages}", Status = 400 };
-                    }
-
-                    customer.Nin = request.Nin;
-                    customer.Ninverified = true;
-                    customer.NinverifiedAt = DateTime.UtcNow;
-                    customer.ModifiedAt = DateTime.UtcNow;
-
-                    await _uow.Customers.SaveCustomer(customer);
-
-                    return new ApiResponse { Success = true, Message = "NIN verified successfully", Boolean = true, Data = youVerifyResponse.Data };
+                        Message = $"NIN verification failed: Provided identity details do not match registered profile name ({customer.FirstName} {customer.LastName}).",
+                        Status = 400
+                    };
                 }
 
-                return new ApiResponse { Message = "NIN not found or invalid.", Status = 400 };
+                customer.Nin = request.Nin;
+                customer.Ninverified = true;
+                customer.NinverifiedAt = DateTime.UtcNow;
+                customer.ModifiedAt = DateTime.UtcNow;
+
+                await _uow.Customers.SaveCustomer(customer);
+
+                return new ApiResponse { Success = true, Message = "NIN verified successfully", Boolean = true, Data = ninData };
             }
 
-            return new ApiResponse { Message = youVerifyResponse?.Message ?? "NIN verification failed", Status = 400 };
+            return new ApiResponse { Message = dojahResponse?.Error ?? "NIN verification failed", Status = 400 };
         }
 
         public async Task<ApiResponse> GetProfile(long userId)

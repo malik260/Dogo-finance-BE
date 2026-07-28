@@ -19,6 +19,7 @@ using DogoFinance.ReportManagement.Interfaces;
 using DogoFinance.ReportManagement.Services;
 using DogoFinance.DataAccess.Layer;
 using DogoFinance.DataAccess.Layer.Global;
+using DogoFinance.Api.BackgroundServices;
 
 namespace DogoFinance.Api.Extensions
 {
@@ -46,7 +47,8 @@ namespace DogoFinance.Api.Extensions
 
             // Register Monnify & Integration
             services.AddHttpClient<IMonnifyService, MonnifyService>();
-            services.AddHttpClient<IYouVerifyService, YouVerifyService>();
+            services.AddHttpClient<IDojahService, DojahService>();
+            services.AddHttpClient<IFxRateService, FxRateService>();
             services.AddScoped<ICloudinaryService, CloudinaryService>();
             services.AddScoped<IDocumentProcessingService, DocumentProcessingService>();
 
@@ -65,6 +67,8 @@ namespace DogoFinance.Api.Extensions
             services.AddScoped<IPortfolioInstrumentService, PortfolioInstrumentService>();
             services.AddScoped<IPortfolioAllocationRuleService, PortfolioAllocationRuleService>();
             services.AddScoped<IInstrumentPriceService, InstrumentPriceService>();
+            services.AddScoped<IFeeComputationService, FeeComputationService>();
+            services.AddHostedService<QuarterlyFeeBackgroundService>();
 
            services.AddScoped<ICustomerReportService, CustomerReportService>();
            

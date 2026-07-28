@@ -1,32 +1,52 @@
+using DogoFinance.AccountingManagement.Interfaces;
 using DogoFinance.BusinessLogic.Layer.Response;
+using DogoFinance.BusinessLogic.Layer.Helpers;
+using DogoFinance.DataAccess.Layer.DTO;
 using DogoFinance.DataAccess.Layer.Interfaces;
+using DogoFinance.DataAccess.Layer.Models.Constants;
 using DogoFinance.DataAccess.Layer.Models.Entities;
 using DogoFinance.DataAccess.Layer.Repositories.Base;
+using DogoFinance.Integration.Interfaces;
 using DogoFinance.TransactionManagement.Interfaces;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Caching.Memory;
-using DogoFinance.Integration.Interfaces;
-using DogoFinance.BusinessLogic.Layer.Helpers;
-using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
-using DogoFinance.DataAccess.Layer.Models.Constants;
+using Microsoft.Extensions.Logging;
+using System.Collections.Generic;
 
 namespace DogoFinance.TransactionManagement.Services
 {
+    // DTO used internally to pass accrued fee items through the liquidation flow
+    internal sealed class AccruedFeeItem
+    {
+        public string FeeType       { get; set; } = string.Empty;
+        public decimal RatePerAnnum { get; set; }
+        public int     DaysHeld     { get; set; }
+        public decimal Amount        { get; set; }
+        public string  AccountCode  { get; set; } = string.Empty;
+        public bool    IsLiability  { get; set; }
+    }
+
     public class TemporaryInvestmentService : DataRepository, ITemporaryInvestmentService
     {
         private readonly IUnitOfWork _uow;
         private readonly ILogger<TemporaryInvestmentService> _logger;
         private readonly IEmailService _emailService;
         private readonly IMemoryCache _cache;
+        private readonly IAccountingService _accountingService;
 
-        public TemporaryInvestmentService(IUnitOfWork uow, ILogger<TemporaryInvestmentService> logger, IEmailService emailService, IMemoryCache cache)
+        public TemporaryInvestmentService(
+            IUnitOfWork uow,
+            ILogger<TemporaryInvestmentService> logger,
+            IEmailService emailService,
+            IMemoryCache cache,
+            IAccountingService accountingService)
         {
             _uow = uow;
             _logger = logger;
             _emailService = emailService;
             _cache = cache;
+            _accountingService = accountingService;
         }
 
         public async Task<ApiResponse> ProcessTempInvestment(long customerId, int portfolioId, decimal amount, string? pin = null, string? otp = null)
@@ -268,7 +288,7 @@ namespace DogoFinance.TransactionManagement.Services
                     return response;
                 }
 
-                // 6. Fee Calculation & Net Amount
+                // 6a. Exit Fee (charged when selling before MinHoldingPeriodDays)
                 decimal exitFee = 0;
                 if (oldestInvestment != null)
                 {
@@ -288,7 +308,26 @@ namespace DogoFinance.TransactionManagement.Services
                         }
                     }
                 }
-                decimal netAmount = amount - exitFee;
+
+                // 6b. Accrued Platform Fees (management, custody, SEC) — pro-rated for days held
+                //     Applied proportionally to the portion of portfolio being redeemed.
+                decimal redeemProportion = currentValue > 0 ? amount / currentValue : 1m;
+                var accruedFeeItems = await CalculateAccruedFeesAtLiquidation(
+                    customer.CustomerId, portfolioId, amount, redeemProportion, currentNav);
+                decimal accruedFeesTotal = accruedFeeItems.Sum(f => f.Amount);
+
+                // Cap: total fees cannot exceed gross amount (net >= 0)
+                decimal totalFees = exitFee + accruedFeesTotal;
+                if (totalFees > amount)
+                {
+                    decimal scale = amount / totalFees;
+                    exitFee = Math.Round(exitFee * scale, 2);
+                    accruedFeesTotal = Math.Round(accruedFeesTotal * scale, 2);
+                    foreach (var fi in accruedFeeItems) fi.Amount = Math.Round(fi.Amount * scale, 2);
+                    totalFees = exitFee + accruedFeesTotal;
+                }
+
+                decimal netAmount = amount - exitFee - accruedFeesTotal;
 
                 // 7. Execute Sale Transaction (Unit Deduction First)
                 var db = await BaseRepository().BeginTrans();
@@ -342,12 +381,74 @@ namespace DogoFinance.TransactionManagement.Services
                         UnitsRequested = unitsToSell,
                         GrossAmount = amount,
                         ExitFeeApplied = exitFee,
+                        AccruedFeesApplied = accruedFeesTotal,
                         NetPayableAmount = netAmount,
                         Status = requestStatus,
                         ExpectedReleaseDate = expectedRelease,
                         CreatedAt = DateTime.UtcNow
                     };
                     await BaseRepository().Insert(liqRequest);
+
+                    // 9b. Post accrued platform fees — journal + fee log + unit deduction
+                    foreach (var fi in accruedFeeItems.Where(f => f.Amount > 0))
+                    {
+                        decimal feeNav = currentNav > 0 ? currentNav : 1.0m;
+                        decimal feeUnits = Math.Round(fi.Amount / feeNav, 6);
+
+                        // Reduce customer units for this fee
+                        if (feeUnits > 0 && userPortfolio.Units >= feeUnits)
+                        {
+                            userPortfolio.Units -= feeUnits;
+                            userPortfolio.InvestedAmount = Math.Max(0, userPortfolio.InvestedAmount - fi.Amount);
+                            userPortfolio.TotalInvested  = Math.Max(0, userPortfolio.TotalInvested  - fi.Amount);
+                        }
+
+                        // Audit record in portfolio investment transactions
+                        await BaseRepository().Insert(new TblPortfolioInvestmentTx
+                        {
+                            CustomerId    = customer.CustomerId,
+                            PortfolioId   = portfolioId,
+                            Amount        = -fi.Amount,
+                            Units         = -feeUnits,
+                            NAV           = feeNav,
+                            TransactionType = "FEE_DEDUCTION",
+                            CreatedAt     = DateTime.UtcNow
+                        });
+
+                        // Double-entry journal: Dr 2110 (customer liability) / Cr revenue or sec payable
+                        var feeRef = $"LIQ_FEE_{liqRequest.Id}_{fi.FeeType}_{DateTime.UtcNow.Ticks}";
+                        await _accountingService.PostJournalAsync(new JournalEntryDto
+                        {
+                            Reference       = feeRef,
+                            Narration       = $"Liquidation {fi.FeeType} Fee — LiqRequest #{liqRequest.Id} (Customer #{customer.CustomerId})",
+                            TransactionDate = DateTime.UtcNow,
+                            Lines = new List<JournalLineDto>
+                            {
+                                new JournalLineDto { AccountCode = "2110",         Debit = fi.Amount, Credit = 0,         Narration = $"Customer Fee Debit ({fi.FeeType})" },
+                                new JournalLineDto { AccountCode = fi.AccountCode, Debit = 0,         Credit = fi.Amount, Narration = $"Fee Credit ({fi.FeeType})" }
+                            }
+                        });
+
+                        // Fee log for audit / idempotency guard on future quarterly runs
+                        await BaseRepository().Insert(new TblQuarterlyFeeLog
+                        {
+                            CustomerId           = customer.CustomerId,
+                            PortfolioId          = portfolioId,
+                            FeeConfigId          = 0,
+                            Year                 = DateTime.UtcNow.Year,
+                            Quarter              = (DateTime.UtcNow.Month - 1) / 3 + 1,
+                            AverageNav           = currentNav,
+                            FeeType              = fi.FeeType,
+                            FeeRateApplied       = fi.RatePerAnnum,
+                            CalculatedFeeAmount  = fi.Amount,
+                            Status               = "DEDUCTED",
+                            JournalReference     = feeRef,
+                            ProcessedAt          = DateTime.UtcNow
+                        });
+                    }
+
+                    // Save updated unit balance after fee deductions
+                    await _uow.Portfolios.SaveCustomerPortfolio(userPortfolio);
 
                     // 10. Immediate Fulfillment (if applicable)
                     if (isImmediate)
@@ -392,12 +493,21 @@ namespace DogoFinance.TransactionManagement.Services
                     // Invalidate Cache
                     _cache.Remove($"portfolio_summary_{customer.CustomerId}");
 
-                    response.SetMessage(workflowMessage, true, new {
-                        RequestId = liqRequest.Id,
-                        AmountLiquidated = amount,
-                        ExitFeesApplied = exitFee,
-                        NetPayable = netAmount,
-                        Status = Enum.GetName(typeof(LiquidationStatus), requestStatus) ?? requestStatus.ToString()
+                    response.SetMessage(workflowMessage, true, new
+                    {
+                        RequestId        = liqRequest.Id,
+                        GrossAmount      = amount,
+                        ExitFeeApplied   = exitFee,
+                        AccruedFees      = accruedFeeItems.Select(f => new
+                        {
+                            f.FeeType,
+                            RatePerAnnum = f.RatePerAnnum,
+                            DaysHeld     = f.DaysHeld,
+                            Amount       = f.Amount
+                        }),
+                        TotalAccruedFees = accruedFeesTotal,
+                        NetPayable       = netAmount,
+                        Status           = Enum.GetName(typeof(LiquidationStatus), requestStatus) ?? requestStatus.ToString()
                     });
                 }
                 catch (Exception)
@@ -584,6 +694,78 @@ namespace DogoFinance.TransactionManagement.Services
             };
 
             await _emailService.SendTemplateEmail(user.Email, "Secure Investment OTP - DogoFinance", "SecurityOtp", placeholders);
+        }
+
+        /// <summary>
+        /// Calculates pro-rated platform fees (management, custody, SEC, etc.) owed at the
+        /// moment of liquidation, covering only the days since the last quarterly deduction.
+        /// Fees are scaled by <paramref name="redeemProportion"/> so partial redeems only
+        /// pay fees on the portion being sold.
+        /// </summary>
+        private async Task<List<AccruedFeeItem>> CalculateAccruedFeesAtLiquidation(
+            long customerId, int portfolioId, decimal grossAmount,
+            decimal redeemProportion, decimal currentNav)
+        {
+            var result = new List<AccruedFeeItem>();
+
+            // 1. Load active, non-waived fee configs for this portfolio
+            var feeConfigs = await BaseRepository()
+                .AsQueryable<TblPortfolioFeeConfig>(f =>
+                    f.PortfolioId == portfolioId && f.IsActive && !f.IsWaived)
+                .ToListAsync();
+
+            if (!feeConfigs.Any()) return result;
+
+            // 2. Find the date up to which fees have already been deducted
+            //    (latest TBL_QUARTERLY_FEE_LOG entry for this customer+portfolio)
+            var lastFeeDate = await BaseRepository()
+                .AsQueryable<TblQuarterlyFeeLog>(l =>
+                    l.CustomerId == customerId &&
+                    l.PortfolioId == portfolioId &&
+                    l.Status == "DEDUCTED")
+                .OrderByDescending(l => l.ProcessedAt)
+                .Select(l => (DateTime?)l.ProcessedAt)
+                .FirstOrDefaultAsync();
+
+            // 3. If no fee was ever deducted, use the customer's oldest BUY date
+            if (lastFeeDate == null)
+            {
+                lastFeeDate = await BaseRepository()
+                    .AsQueryable<TblPortfolioInvestmentTx>(t =>
+                        t.CustomerId == customerId &&
+                        t.PortfolioId == portfolioId &&
+                        t.TransactionType == "BUY")
+                    .OrderBy(t => t.CreatedAt)
+                    .Select(t => (DateTime?)t.CreatedAt)
+                    .FirstOrDefaultAsync();
+            }
+
+            if (lastFeeDate == null) return result; // No investment history — nothing to charge
+
+            int daysHeld = (DateTime.UtcNow.Date - lastFeeDate.Value.Date).Days;
+            if (daysHeld <= 0) return result; // Fees already current — nothing to charge
+
+            // 4. Compute pro-rated daily fee per config
+            //    formula: grossAmount × (rate / 100 / 365) × daysHeld × redeemProportion
+            foreach (var config in feeConfigs)
+            {
+                decimal dailyRate = config.PercentagePerAnnum / 100m / 365m;
+                decimal feeAmount = Math.Round(grossAmount * dailyRate * daysHeld * redeemProportion, 2);
+
+                if (feeAmount <= 0) continue;
+
+                result.Add(new AccruedFeeItem
+                {
+                    FeeType      = config.FeeType,
+                    RatePerAnnum = config.PercentagePerAnnum,
+                    DaysHeld     = daysHeld,
+                    Amount       = feeAmount,
+                    AccountCode  = config.TargetAccountCode,
+                    IsLiability  = config.IsLiability
+                });
+            }
+
+            return result;
         }
 
         private async Task<TblPortfolioPrice?> GetLatestPrice(int portfolioId)

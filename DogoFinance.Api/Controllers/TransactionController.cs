@@ -1,10 +1,10 @@
 using DogoFinance.BusinessLogic.Layer.Models.Request;
 using DogoFinance.BusinessLogic.Layer.Response;
+using DogoFinance.TransactionManagement.DTOs;
 using DogoFinance.TransactionManagement.Interfaces;
 using DogoFinance.DataAccess.Layer.DTO;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
-
 using Microsoft.AspNetCore.Authorization;
 
 namespace DogoFinance.Api.Controllers
@@ -42,7 +42,6 @@ namespace DogoFinance.Api.Controllers
         {
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
-
             return Ok(await _investmentService.InvestAsync(model, long.Parse(userIdStr)));
         }
 
@@ -67,7 +66,6 @@ namespace DogoFinance.Api.Controllers
         {
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
-
             return Ok(await _tempInvestmentService.ProcessSell(long.Parse(userIdStr), model.PortfolioId, model.Amount, model.Pin, model.Otp));
         }
 
@@ -76,7 +74,6 @@ namespace DogoFinance.Api.Controllers
         {
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
-
             return Ok(await _investmentService.GetPortfolioSummary(long.Parse(userIdStr)));
         }
 
@@ -86,7 +83,6 @@ namespace DogoFinance.Api.Controllers
         {
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
-
             return Ok(await _tempInvestmentService.ProcessTempInvestment(long.Parse(userIdStr), model.PortfolioId, model.Amount, model.Pin, model.Otp));
         }
 
@@ -95,7 +91,6 @@ namespace DogoFinance.Api.Controllers
         {
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
-
             return Ok(await _tempInvestmentService.GetTempPortfolioStats(long.Parse(userIdStr), portfolioId));
         }
 
@@ -164,12 +159,9 @@ namespace DogoFinance.Api.Controllers
         public async Task<IActionResult> MonnifyWebhook()
         {
             var signature = Request.Headers["monnify-signature"].FirstOrDefault();
-            
             using var reader = new StreamReader(Request.Body);
             var payload = await reader.ReadToEndAsync();
-
             var response = await _transactionService.HandleMonnifyWebhook(payload, signature);
-            //return StatusCode(response.Status, response);
             return Ok();
         }
 
@@ -179,7 +171,6 @@ namespace DogoFinance.Api.Controllers
             Console.WriteLine("--- GetVirtualAccount Endpoint Hit ---");
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
-
             var response = await _transactionService.CreateVirtualAccount(long.Parse(userIdStr));
             return StatusCode(response.Status, response);
         }
@@ -189,7 +180,6 @@ namespace DogoFinance.Api.Controllers
         {
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
-
             return Ok(await _investmentService.GetPortfolioSummary(long.Parse(userIdStr)));
         }
 
@@ -248,7 +238,6 @@ namespace DogoFinance.Api.Controllers
         {
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
-
             var response = await _transactionService.GetTransactionHistory(long.Parse(userIdStr));
             return Ok(response);
         }
@@ -266,7 +255,6 @@ namespace DogoFinance.Api.Controllers
         {
             var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
-
             var response = await _transactionService.GetPendingApprovals(long.Parse(userIdStr));
             return Ok(response);
         }
@@ -276,8 +264,52 @@ namespace DogoFinance.Api.Controllers
         {
             var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
-
             var response = await _transactionService.ProcessTransactionApproval(long.Parse(userIdStr), request.TransactionId, request.IsApproved, request.Pin);
+            return StatusCode(response.Status, response);
+        }
+
+        // ─── DOLLAR WALLET ENDPOINTS ─────────────────────────────────────────────────
+
+        /// <summary>
+        /// GET api/transaction/dollar/fx-quote?ngnAmount=50000
+        /// Returns a live FX rate quote (rate + estimated USD) for a given NGN amount.
+        /// </summary>
+        [HttpGet("dollar/fx-quote")]
+        public async Task<IActionResult> GetFxRateQuote([FromQuery] decimal ngnAmount)
+        {
+            if (ngnAmount <= 0)
+                return BadRequest(new ApiResponse { Message = "ngnAmount must be greater than zero.", Status = 400 });
+
+            var response = await _transactionService.GetFxRateQuoteAsync(ngnAmount);
+            return StatusCode(response.Status, response);
+        }
+
+        /// <summary>
+        /// POST api/transaction/dollar/fund-from-naira
+        /// Converts NGN from the customer's NGN wallet to their USD wallet at the live FX rate.
+        /// Requires a valid transaction PIN.
+        /// </summary>
+        [HttpPost("dollar/fund-from-naira")]
+        public async Task<IActionResult> FundDollarWalletFromNaira([FromBody] FundDollarWalletFromNairaRequest request)
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
+
+            var response = await _transactionService.FundDollarWalletFromNairaAsync(long.Parse(userIdStr), request);
+            return StatusCode(response.Status, response);
+        }
+
+        /// <summary>
+        /// POST api/transaction/dollar/wire-funding
+        /// Submits a USD wire transfer funding request for admin review and manual approval.
+        /// </summary>
+        [HttpPost("dollar/wire-funding")]
+        public async Task<IActionResult> InitiateDollarWireFunding([FromBody] FundDollarWalletViaWireRequest request)
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized(new ApiResponse { Message = "Not logged in", Status = 401 });
+
+            var response = await _transactionService.InitiateDollarWireFundingAsync(long.Parse(userIdStr), request);
             return StatusCode(response.Status, response);
         }
     }

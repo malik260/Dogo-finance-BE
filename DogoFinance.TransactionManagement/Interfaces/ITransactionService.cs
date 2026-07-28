@@ -1,5 +1,6 @@
 using DogoFinance.BusinessLogic.Layer.Models.Request;
 using DogoFinance.BusinessLogic.Layer.Response;
+using DogoFinance.TransactionManagement.DTOs;
 
 namespace DogoFinance.TransactionManagement.Interfaces
 {
@@ -20,5 +21,10 @@ namespace DogoFinance.TransactionManagement.Interfaces
         Task<ApiResponse> SubmitManualFundingRequest(long userId, ManualFundingRequestDto request);
         Task<ApiResponse> GetPendingApprovals(long userId);
         Task<ApiResponse> ProcessTransactionApproval(long userId, long transactionId, bool isApproved, string pin);
+
+        // Dollar Wallet
+        Task<ApiResponse> GetFxRateQuoteAsync(decimal ngnAmount);
+        Task<ApiResponse> FundDollarWalletFromNairaAsync(long customerId, FundDollarWalletFromNairaRequest request);
+        Task<ApiResponse> InitiateDollarWireFundingAsync(long customerId, FundDollarWalletViaWireRequest request);
     }
 }
