@@ -119,19 +119,31 @@ namespace DogoFinance.Integration.Models.Dojah
     public class DojahBvnData
     {
         [JsonPropertyName("bvn")]
-        public DojahValueField? Bvn { get; set; }
+        public string? Bvn { get; set; }
 
         [JsonPropertyName("first_name")]
-        public DojahFieldStatus? FirstName { get; set; }
+        public string? FirstName { get; set; }
 
-        [JsonPropertyName("last_name")]     
-        public DojahFieldStatus? LastName { get; set; }
+        [JsonPropertyName("last_name")]
+        public string? LastName { get; set; }
 
         [JsonPropertyName("middle_name")]
-        public DojahFieldStatus? MiddleName { get; set; }
+        public string? MiddleName { get; set; }
+
+        [JsonPropertyName("gender")]
+        public string? Gender { get; set; }
 
         [JsonPropertyName("date_of_birth")]
-        public DojahFieldStatus? DateOfBirth { get; set; }
+        public string? DateOfBirth { get; set; }
+
+        [JsonPropertyName("phone_number1")]
+        public string? PhoneNumber1 { get; set; }
+
+        [JsonPropertyName("phone_number2")]
+        public string? PhoneNumber2 { get; set; }
+
+        [JsonPropertyName("image")]
+        public string? Image { get; set; }
     }
 
     public class DojahNinData

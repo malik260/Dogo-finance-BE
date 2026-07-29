@@ -345,45 +345,54 @@ namespace DogoFinance.CustomerManagement.Services
 
             if (customer.Bvnverified) return new ApiResponse { Success = true, Message = "BVN already verified", Boolean = true };
 
-            var dojahResponse = await _dojahService.ValidateBvnAsync(
-                request.Bvn,
-                customer.FirstName,
-                customer.LastName,
-                customer.DateOfBirth?.ToString("yyyy-MM-dd")
-            );
+            var dojahResponse = await _dojahService.ValidateBvnAsync(request.Bvn);
 
-            if (dojahResponse != null && dojahResponse.Entity != null && string.IsNullOrEmpty(dojahResponse.Error))
+            if (dojahResponse?.Entity == null || !string.IsNullOrEmpty(dojahResponse.Error))
             {
-                var bvnData = dojahResponse.Entity;
-
-                // Validate BVN status and Name match statuses from Dojah
-                bool bvnValid = bvnData.Bvn == null || bvnData.Bvn.Status;
-                bool firstNameMatch = bvnData.FirstName == null || bvnData.FirstName.Status || bvnData.FirstName.ConfidenceValue > 0;
-                bool lastNameMatch = bvnData.LastName == null || bvnData.LastName.Status || bvnData.LastName.ConfidenceValue > 0;
-
-                if (!bvnValid || !firstNameMatch || !lastNameMatch)
-                {
-                    _logger.LogWarning("BVN verification details mismatch for customer {CustomerId}. Dojah status: BVN={BvnValid}, First={FirstMatch}, Last={LastMatch}",
-                        customerId, bvnValid, firstNameMatch, lastNameMatch);
-
-                    return new ApiResponse
-                    {
-                        Message = $"BVN verification failed: Provided identity details do not match registered profile name ({customer.FirstName} {customer.LastName}).",
-                        Status = 400
-                    };
-                }
-
-                customer.Bvn = request.Bvn;
-                customer.Bvnverified = true;
-                customer.BvnverifiedAt = DateTime.UtcNow;
-                customer.ModifiedAt = DateTime.UtcNow;
-
-                await _uow.Customers.SaveCustomer(customer);
-
-                return new ApiResponse { Success = true, Message = "BVN verified successfully", Boolean = true, Data = bvnData };
+                _logger.LogError("BVN validation API returned no data or error for customer {CustomerId}: {Error}", customerId, dojahResponse?.Error);
+                return new ApiResponse { Message = dojahResponse?.Error ?? "BVN validation failed. Please try again.", Status = 400 };
             }
 
-            return new ApiResponse { Message = dojahResponse?.Error ?? "BVN validation failed", Status = 400 };
+            var bvnData = dojahResponse.Entity;
+
+            bool firstNameMatch = string.Equals(
+                bvnData.FirstName?.Trim(), customer.FirstName?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+            bool lastNameMatch = string.Equals(
+                bvnData.LastName?.Trim(), customer.LastName?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+            bool dateOfBirthMatch = true; // default pass if customer has no DOB stored
+            if (customer.DateOfBirth.HasValue && !string.IsNullOrWhiteSpace(bvnData.DateOfBirth))
+            {
+                if (DateTime.TryParse(bvnData.DateOfBirth, out var bvnDob))
+                    dateOfBirthMatch = customer.DateOfBirth.Value.Date == bvnDob.Date;
+                else
+                    dateOfBirthMatch = false;
+            }
+
+            if (!firstNameMatch || !lastNameMatch || !dateOfBirthMatch)
+            {
+                _logger.LogWarning(
+                    "BVN data mismatch for customer {CustomerId}. FirstName={FirstMatch}, LastName={LastMatch}, DOB={DobMatch}",
+                    customerId, firstNameMatch, lastNameMatch, dateOfBirthMatch);
+
+                return new ApiResponse
+                {
+                    Message = $"BVN verification failed: The identity details on your BVN do not match your registered profile ({customer.FirstName} {customer.LastName}). Please ensure your account details are correct.",
+                    Status = 400
+                };
+            }
+
+            // All checks passed — mark as verified
+            customer.Bvn = request.Bvn;
+            customer.Bvnverified = true;
+            customer.BvnverifiedAt = DateTime.UtcNow;
+            customer.ModifiedAt = DateTime.UtcNow;
+
+            await _uow.Customers.SaveCustomer(customer);
+
+            _logger.LogInformation("BVN verified successfully for customer {CustomerId}", customerId);
+            return new ApiResponse { Success = true, Message = "BVN verified successfully", Boolean = true };
         }
 
         public async Task<ApiResponse> VerifyNin(long customerId, NinVerificationRequest request)

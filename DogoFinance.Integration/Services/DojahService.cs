@@ -45,11 +45,11 @@ namespace DogoFinance.Integration.Services
                 PrepareHeaders();
 
                 var queryParams = new List<string> { $"bvn={Uri.EscapeDataString(bvn)}" };
-                if (!string.IsNullOrEmpty(firstName)) queryParams.Add($"first_name={Uri.EscapeDataString(firstName)}");
-                if (!string.IsNullOrEmpty(lastName)) queryParams.Add($"last_name={Uri.EscapeDataString(lastName)}");
-                if (!string.IsNullOrEmpty(dateOfBirth)) queryParams.Add($"date_of_birth={Uri.EscapeDataString(dateOfBirth)}");
+                //if (!string.IsNullOrEmpty(firstName)) queryParams.Add($"first_name={Uri.EscapeDataString(firstName)}");
+                //if (!string.IsNullOrEmpty(lastName)) queryParams.Add($"last_name={Uri.EscapeDataString(lastName)}");
+                //if (!string.IsNullOrEmpty(dateOfBirth)) queryParams.Add($"date_of_birth={Uri.EscapeDataString(dateOfBirth)}");
 
-                var url = $"{baseUrl.TrimEnd('/')}/api/v1/kyc/bvn?{string.Join("&", queryParams)}";
+                var url = $"{baseUrl.TrimEnd('/')}/api/v1/kyc/bvn/full?{string.Join("&", queryParams)}";
                 _logger.LogInformation("Calling Dojah BVN validation endpoint: {Url}", url);
 
                 var response = await _httpClient.GetAsync(url);
